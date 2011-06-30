@@ -1,0 +1,26 @@
+purpose "Count k-mers or qmers in fasta or fastq files"
+package "jellyfish count"
+
+option("mer-len", "m") {
+  uint32; required; description "Length of mer"
+}
+option("size", "s") {
+  uint32; required; description "Hash size"
+}
+option("threads", "t") {
+  uint32; default "1"; description "Number of threads"
+}
+option("output", "o") {
+  string; default "mer_counts"; description "Output prefix"
+}
+option("counter-len", "c") {
+  uint32; default "7"; typestr "Length in bits"
+  description "Length of counting field"
+}
+option("out-counter-len") {
+  uint32; default "4"; typestr "Length in bytes"
+  description "Length of counter fiel in output"
+}
+option("both-strands", "C") {
+  flag; off; description "Count both strand, canonical representation"
+}

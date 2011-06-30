@@ -1,0 +1,181 @@
+#! /usr/bin/env ruby
+
+$options = []
+class NoTarget
+  def description str; $description = str; end
+  def description= str; $description = str; end
+  def method_missing(m, *args)
+    raise "#{m} outside of option description"
+  end
+end
+$target = NoTarget.new
+
+def purpose str; $purpose = str; end
+def purpose= str; $purpose = str; end
+def package str; $package = str; end
+def package= str; $package = str; end
+def description str; $target.description = str; end
+def description= str; $target.description = str; end
+def int32; $target.type = :int32; end
+def int64; $target.type = :int64; end
+def uint32; $target.type = :uint32; end
+def uint64; $target.type = :uint64; end
+def double; $target.type = :double; end
+def string; $target.type = :string; end
+def required; $target.required = true; end
+def hidden; $target.hidden = true; end
+def flag; $target.type = :flag; end
+def on; $target.default = "true"; end
+def off; $target.default = "false"; end
+def default str; $target.default = str; end
+def default= str; $target.default = str; end
+def typestr str; $target.typestr = str; end
+def typestr= str; $target.typestr = str; end
+
+$typejust = 12;
+class Option
+  attr_accessor :description, :type, :required, :default, :typestr
+  attr_reader :long, :short, :var
+
+  @@type_to_C_type = { 
+    :uint32 => "uint32_t",
+    :uint64 => "uint64_t",
+    :int32 => "int32_t",
+    :int64 => "int64_t",
+    :double => "double",
+    :string => "std::string",
+  }
+  @@type_default = {    :uint32 => "0",
+    :uint64 => "0",
+    :int32 => "0",
+    :int64 => "0",
+    :double => "0.0d",
+    :string => "\"\"",
+  }
+  def initialize(long, short)
+    @long, @short = long, short
+    @var = (@long || @short).gsub(/[^a-zA-Z0-9_]/, "_")
+    @type = "string"
+  end
+
+  def check
+    case @type
+      when :uint32, :uint64
+      @default.nil? || @default =~ /\d+/ or
+        raise "Invalid unsigned integer #{@default} for #{@long || @short}"
+      when :int32, :int64
+      @default.nil? || @default =~ /[+-]?\d+/ or
+        raise "Invalid integer #{@default} for #{@long || @short}"
+      when :double
+      @default.nil? || @default =~ /[+-][\d.]+([eE][+-]?\d+)?/ or
+        raise "Invalid double #{@default} for #{@long || @short}"
+    end
+  end
+
+  def var_decl(off)
+    if @type == :flag
+      "#{off}#{"bool".ljust($typejust)} #{@var}_flag;"
+    else
+      "#{off}#{@@type_to_C_type[@type].ljust($typejust)} #{@var}_arg;\n" +
+        "#{off}#{"bool".ljust($typejust)} #{@var}_given;"
+    end
+  end
+
+  def init
+    "#{@var}(" +
+      (@type == :string ? "\"" : "") +
+      (@default || @@type_default[@type]) +
+      (@type == :string ? "\"" : "") +
+      ")"
+  end
+
+  def long_enum; @short.nil? ? @var.upcase + "_OPT" : nil; end
+  def struct
+    "{\"#{long}\", #{@type == :flag ? 0 : 1}, 0, #{@short ? "'" + @short + "'" : long_enum}}"
+  end
+  def short_str
+    return nil if @short.nil?
+    @short + (@type == :flag ? "" : ":")
+  end
+end
+
+def option(name1, name2 = nil)
+  long = short = nil
+  if name1 =~ /^--/ || name1.length >= 2
+    long, short = name1, name2
+  elsif !name2.nil? && (name2 =~ /^--/ || name2.length >= 2)
+    long, short = name2, name1
+  else
+    long, short = nil, name1
+  end
+
+  long.gsub!(/^--/, "") unless long.nil?
+  short.gsub!(/^-/, "") unless short.nil?
+  o = Option.new(long, short)
+  $options << o
+  $target = o
+  begin
+    yield
+  ensure
+    $target = NoTarget.new
+  end
+end
+
+def output_cpp_parser(h, class_name)
+  $options.each { |o| o.check }
+
+  h.puts("#ifndef __#{class_name.upcase()}_HPP__",
+         "#define __#{class_name.upcase()}_HPP__",
+         "", "#include <stdint.h>", "#include <string>", 
+         "#include <getopt.h>", "",
+         "class #{class_name} {",
+         "public:")
+  $options.each { |o| h.puts(o.var_decl("  ")) }
+  h.puts("")
+
+  # Create enum if option with no short version
+  only_long = $options.map { |o| o.long_enum }.compact
+  unless only_long.empty?
+    only_long[0] += " = 1000"
+    h.puts("  enum {", "    " + only_long.join(",\n    "), "  };")
+  end
+
+  # Constructor and initialization of 
+  h.puts("", "  #{class_name}(int argc, char *argv[]) :")
+  h.puts("    " + $options.map { |o| o.init }.join(",\n    "))
+  h.puts("  {",
+         "    static struct option long_options[] = {")
+  h.puts("      " + $options.map { |o| o.struct }.join(",\n      ") + ",")
+  h.puts("      {\"help\", 0, 0, 'h'},",
+         "      {0, 0, 0, 0}", "    };", "")
+  short_str = $options.map { |o| o.short_str }.compact.join("")
+  h.puts("    static const char *short_options = \"#{short_str}\";")
+  h.puts("    while(true) {", 
+         "      int index = -1;",
+         "      int c = getopt_long(argc, argv, short_options, long_options, &index);",
+         "      if(c == -1) break;",
+         "      switch(c) {",
+         "      case ':':", 
+         "        std::cerr << \"Missing required argument for \"",
+         "                  << (index == -1 ? std::string(optopt) : std::string(long_options[index].name))",
+         "                  << std::endl;",
+         "        exit(1);",
+         "      case 'h':",
+         "        print_usage(); print_help();",
+         "        exit(0);",
+         "      case '?':",
+         "        exit(1);",
+         "      }",
+         "    }",
+         "  }")
+
+  h.puts("  void print_usage() {",
+         "    std::cout << \"Usage: #{$package || class_name} [options]"
+  h.puts("};", "#endif // __#{class_name.upcase}_HPP__")
+end
+
+load(ARGV[0])
+class_name = File.basename(ARGV[0])
+open(class_name + ".hpp", "w") do |header|
+  output_cpp_parser(header, class_name)
+end
