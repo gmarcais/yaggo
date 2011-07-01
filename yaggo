@@ -1,6 +1,8 @@
 #! /usr/bin/env ruby
 
 $options = []
+$args = []
+
 class NoTarget
   def description str; $description = str; end
   def description= str; $description = str; end
@@ -16,6 +18,9 @@ def package str; $package = str; end
 def package= str; $package = str; end
 def description str; $target.description = str; end
 def description= str; $target.description = str; end
+def version str; $version = str; end
+def version= str; $version = str; end
+
 def int32; $target.type = :int32; end
 def int64; $target.type = :int64; end
 def uint32; $target.type = :uint32; end
@@ -31,31 +36,49 @@ def default str; $target.default = str; end
 def default= str; $target.default = str; end
 def typestr str; $target.typestr = str; end
 def typestr= str; $target.typestr = str; end
+def multiple; $target.multiple = true; end
+def at_least n; $target.at_least = n; end
 
-$typejust = 12;
+$typejust = 30;
+$type_to_C_type = { 
+  :uint32 => "uint32_t",
+  :uint64 => "uint64_t",
+  :int32 => "int32_t",
+  :int64 => "int64_t",
+  :double => "double",
+  :string => "std::string",
+}
+$type_default = {
+  :uint32 => "0",
+  :uint64 => "0",
+  :int32 => "0",
+  :int64 => "0",
+  :double => "0.0d",
+  :string => "",
+}
+
+def str_conv(arg, type)
+  case type
+  when :string
+    "std::string(#{arg})"
+  when :uint32, :uint64
+    "conv_uint<#{@type}_t>((const char *)#{arg}, err)"
+  when :int32, :int64
+    "conv_int<#{@type}_t>((const char *)#{arg}, err)"
+  when :double
+    "conv_double((const char *)#{arg}, err)"
+  end
+end
+
 class Option
   attr_accessor :description, :type, :required, :default, :typestr
+  attr_accessor :hidden, :multiple
   attr_reader :long, :short, :var
 
-  @@type_to_C_type = { 
-    :uint32 => "uint32_t",
-    :uint64 => "uint64_t",
-    :int32 => "int32_t",
-    :int64 => "int64_t",
-    :double => "double",
-    :string => "std::string",
-  }
-  @@type_default = {    :uint32 => "0",
-    :uint64 => "0",
-    :int32 => "0",
-    :int64 => "0",
-    :double => "0.0d",
-    :string => "\"\"",
-  }
   def initialize(long, short)
     @long, @short = long, short
     @var = (@long || @short).gsub(/[^a-zA-Z0-9_]/, "_")
-    @type = "string"
+    @type = :string
   end
 
   def check
@@ -69,24 +92,37 @@ class Option
       when :double
       @default.nil? || @default =~ /[+-][\d.]+([eE][+-]?\d+)?/ or
         raise "Invalid double #{@default} for #{@long || @short}"
+      when :flag
+      raise "A flag cannot be declared multiple" if @multiple
     end
   end
 
-  def var_decl(off)
+  def var_decl
     if @type == :flag
-      "#{off}#{"bool".ljust($typejust)} #{@var}_flag;"
+      ["#{"bool".ljust($typejust)} #{@var}_flag;"]
     else
-      "#{off}#{@@type_to_C_type[@type].ljust($typejust)} #{@var}_arg;\n" +
-        "#{off}#{"bool".ljust($typejust)} #{@var}_given;"
+      a = []
+      if @multiple
+        a << ("std::vector<#{$type_to_C_type[@type]}>".ljust($typejust) + " #{@var}_arg;")
+      else
+        a << "#{$type_to_C_type[@type].ljust($typejust)} #{@var}_arg;"
+      end
+      a << "#{"bool".ljust($typejust)} #{@var}_given;"
     end
   end
 
   def init
-    "#{@var}(" +
-      (@type == :string ? "\"" : "") +
-      (@default || @@type_default[@type]) +
-      (@type == :string ? "\"" : "") +
-      ")"
+    s = "#{@var}_#{@type == :flag ? "flag" : "arg"}("
+    unless @multiple
+      s += (@type == :string ? "\"" : "") +
+        (@default || $type_default[@type]) +
+        (@type == :string ? "\"" : "")
+    end
+    s += ")"
+    unless @type == :flag
+      s += ", #{@var}_given(false)"
+    end
+    s
   end
 
   def long_enum; @short.nil? ? @var.upcase + "_OPT" : nil; end
@@ -96,6 +132,94 @@ class Option
   def short_str
     return nil if @short.nil?
     @short + (@type == :flag ? "" : ":")
+  end
+  def switches
+    s  = @short.nil? ? "    " : "-#{@short}"
+    s += ", " unless @short.nil? || @long.nil?
+    unless @long.nil?
+      s += "--#{@long}"
+      s += "=#{@typestr || @type}" unless @type == :flag
+    end
+    s
+  end
+
+  def help
+    s  = @required ? "*" : " "
+    s += @description || "No description"
+    s += " (#{@default})" unless @default.nil?
+    s
+  end
+
+  def dump
+    if @type == :flag
+      ["\"#{@var}_flag:\"", "#{@var}_flag"]
+    else
+      ["\"#{@var}_given:\"", "#{@var}_given", 
+       "\" #{@var}_arg:\"", @multiple ? "vec_str(#{@var}_arg)" : "#{@var}_arg"]
+    end
+  end
+
+  def parse_arg
+    return ["#{@var}_flag = true;"] if @type == :flag
+    a = ["#{@var}_given = true;"]
+    case @type
+    when :string
+      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
+            : "#{@var}_arg.assign(optarg);")
+    when :uint32, :uint64
+      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
+            : "#{@var}_arg = #{str_conv("optarg", @type)};")
+      a << "CHECK_ERR(#{@type}_t, optarg, \"#{switches}\")" 
+    when :int32, :int64
+      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
+            : "#{@var}_arg = #{str_conv("optarg", @type)};")
+      a << "CHECK_ERR(#{@type}_t, optarg, \"#{switches}\")" 
+    when :double
+      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
+            : "#{@var}_arg = #{str_conv("optarg", @type)};")
+      a << "CHECK_ERR(#{@type}, optarg, \"#{switches}\")" 
+    end
+    a
+  end
+end
+
+class Arg
+  attr_accessor :description, :type, :default, :typestr, :multiple, :at_least
+  attr_reader :name
+  def initialize(str)
+    @name = str
+    @type = :string
+    @at_least = 0
+  end
+
+  def check; true; end
+
+  def var_decl
+    if @multiple
+      ["std::vector<#{$type_to_C_type[@type]}>".ljust($typejust) + " #{@name}_arg;"]
+    else
+      ["#{$type_to_C_type[@type]}".ljust($typejust) + " #{@name}_arg;"]
+    end
+  end
+
+  def dump
+    ["\"#{@name}_arg:\"",
+     @multiple ? "vec_str(#{@name}_arg)" : "#{@name}_arg"]
+  end
+
+  def parse_arg
+    a = []
+    off = ""
+    if @multiple
+      a << "for( ; optind < argc; ++optind) {"
+      a << "  #{@name}_arg.push_back(#{str_conv("argv[optind]", @type)});"
+      off = "  "
+    else
+      a << "#{@name}_arg = #{str_conv("argv[optind]", @type)};"
+    end
+    a << (off + "CHECK_ERR(#{@type}_t, argv[optind], \"#{@name}\")")
+    a << (@multiple ? "}" : "++optind;")
+    a
   end
 end
 
@@ -121,61 +245,264 @@ def option(name1, name2 = nil)
   end
 end
 
+def arg(name)
+  a = Arg.new(name)
+  $args << a
+  $target = a
+  begin
+    yield
+  ensure
+    $target = NoTarget.new
+  end
+end
+
 def output_cpp_parser(h, class_name)
   $options.each { |o| o.check }
+  $args.each { |a| a.check }
+  if $args.size > 1 && $args[0..-2].any? { |a| a.multiple }
+    raise "Only last arg can be marked 'multiple'"
+  end
 
-  h.puts("#ifndef __#{class_name.upcase()}_HPP__",
-         "#define __#{class_name.upcase()}_HPP__",
-         "", "#include <stdint.h>", "#include <string>", 
-         "#include <getopt.h>", "",
-         "class #{class_name} {",
-         "public:")
-  $options.each { |o| h.puts(o.var_decl("  ")) }
+  h.puts(<<EOS)
+#ifndef __#{class_name.upcase()}_HPP__
+#define __#{class_name.upcase()}_HPP__
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <getopt.h>
+#include <errno.h>
+#include <string.h>
+#include <string>
+#include <limits>
+#include <vector>
+#include <iostream>
+#include <sstream>
+
+class #{class_name} {
+public:
+EOS
+
+  ($options + $args).each { |o| h.puts("  " + o.var_decl.join("\n  ")) }
   h.puts("")
 
   # Create enum if option with no short version
   only_long = $options.map { |o| o.long_enum }.compact
-  unless only_long.empty?
-    only_long[0] += " = 1000"
-    h.puts("  enum {", "    " + only_long.join(",\n    "), "  };")
+  h.print("  enum {\n    FULL_HELP_OPT = 1000,\n    USAGE_OPT")
+  if only_long.empty?
+    h.puts("\n };")
+  else
+    h.puts(",", "    " + only_long.join(",\n    "), "  };")
   end
 
-  # Constructor and initialization of 
+  # Constructor and initialization
   h.puts("", "  #{class_name}(int argc, char *argv[]) :")
   h.puts("    " + $options.map { |o| o.init }.join(",\n    "))
   h.puts("  {",
          "    static struct option long_options[] = {")
   h.puts("      " + $options.map { |o| o.struct }.join(",\n      ") + ",")
   h.puts("      {\"help\", 0, 0, 'h'},",
-         "      {0, 0, 0, 0}", "    };", "")
+         "      {\"full-help\", 0, 0, FULL_HELP_OPT},",
+         "      {\"usage\", 0, 0, USAGE_OPT},",
+         "      {\"version\", 0, 0, 'V'},",
+         "      {0, 0, 0, 0}", "    };")
   short_str = $options.map { |o| o.short_str }.compact.join("")
-  h.puts("    static const char *short_options = \"#{short_str}\";")
-  h.puts("    while(true) {", 
-         "      int index = -1;",
-         "      int c = getopt_long(argc, argv, short_options, long_options, &index);",
-         "      if(c == -1) break;",
-         "      switch(c) {",
-         "      case ':':", 
-         "        std::cerr << \"Missing required argument for \"",
-         "                  << (index == -1 ? std::string(optopt) : std::string(long_options[index].name))",
-         "                  << std::endl;",
-         "        exit(1);",
-         "      case 'h':",
-         "        print_usage(); print_help();",
-         "        exit(0);",
-         "      case '?':",
-         "        exit(1);",
-         "      }",
-         "    }",
-         "  }")
+  h.puts("    static const char *short_options = \"hV#{short_str}\";", "")
+  if $options.any? { |o| o.type != :flag && o.type != :string }
+    h.puts("    std::string err;")
+  end
+  # Actual parsing
+  h.puts(<<EOS)
+#define CHECK_ERR(type,val,which) if(!err.empty()) { std::cerr << "Invalid " #type " '" << val << "' for [" which "]: " << err << "\\n"; exit(1); }
+    while(true) { 
+      int index = -1;
+      int c = getopt_long(argc, argv, short_options, long_options, &index);
+      if(c == -1) break;
+      switch(c) {
+      case ':': 
+        std::cerr << \"Missing required argument for \"
+                  << (index == -1 ? std::string(1, (char)optopt) : std::string(long_options[index].name))
+                  << std::endl;
+        exit(1);
+      case 'h':
+        print_usage(); std::cout << \"\\n\"; print_help();
+        exit(0);
+      case FULL_HELP_OPT:
+        print_usage(); std::cout << \"\\n\"; print_help(true);
+        exit(0);
+      case USAGE_OPT:
+        print_usage();
+        exit(0);
+      case 'V':
+        print_version();
+        exit(0);
+      case '?':
+        std::cerr << \"Use --usage or --help for some help\\n\";
+        exit(1);
+EOS
+  
+  $options.each { |o|
+    h.puts("      case #{o.long_enum || "'" + o.short + "'"}:",
+           "        " + o.parse_arg.join("\n        "),
+           "        break;")
+  }
+  h.puts("      }", # close case
+         "    }") # close while(true)
 
-  h.puts("  void print_usage() {",
-         "    std::cout << \"Usage: #{$package || class_name} [options]"
-  h.puts("};", "#endif // __#{class_name.upcase}_HPP__")
+  # Check required
+  $options.each { |o|
+    next unless o.required
+    h.puts(<<EOS)
+    if(!#{o.var}_given) {
+      std::cerr << "[#{o.switches}] required switch\\n";
+      exit(1);
+    }
+EOS
+  }
+  
+  # Parse arguments
+  if $args.size == 0 || !$args[-1].multiple
+    h.puts(<<EOS)
+    if(argc - optind != #{$args.size}) {
+      std::cerr << "Requires exactly #{$args.size} argument#{$args.size > 1 ? "s" : ""}.\\n";
+      exit(1);
+    }
+EOS
+  else
+    min_args = $args.size - 1 + $args[-1].at_least
+    h.puts(<<EOS)
+    if(argc - optind < #{min_args}) {
+      std::cerr << "Requires at least #{min_args} argument#{min_args > 1 ? "s" : ""}.\\n";
+      exit(1);
+    }
+EOS
+  end
+  $args.each { |a| h.puts("    " + a.parse_arg.join("\n    ")) }
+
+  h.puts("  }") # close constructor
+
+  # Usage
+  h.puts(<<EOS)
+  void print_usage(std::ostream &os = std::cout) {
+    os << "Usage: #{$package || class_name} [options]"
+EOS
+  $args.each { |a|
+    h.puts("       << \" #{a.name}:#{a.typestr || a.type}#{a.multiple ? "+" : ""}\"")
+  }
+  h.puts(<<EOS)
+       << "\\n";
+  }
+EOS
+
+  # Help
+  h.puts("  void print_help(bool hidden = false, std::ostream &os = std::cout) {",
+         "    os << \"#{$description || "No description"}\" << \"\\n\\n\"",
+         "       << \"Options (default value in (), *required):\\n\";")
+  $options.each { |o|
+    # need to be improved. break lines if too long
+    h.puts("    if(hidden)") if o.hidden
+    h.puts("    " + (o.hidden ? "  " : "") +
+           "os << \" #{o.switches.ljust(40)}#{o.help}\\n\";") 
+  }
+  h.puts("    os << \" #{"-h, --help".ljust(40)} This message\\n\";",
+         "    os << \" #{"    --full-help".ljust(40)} Detailed help\\n\";",
+         "    os << \" #{"-V, --version".ljust(40)} Version\\n\";")
+  h.puts("  }")
+
+  # Version
+  h.puts("  void print_version(std::ostream &os = std::cout) {",
+         "#ifndef PACKAGE_VERSION",
+         "#define PACKAGE_VERSION \"0.0.0\"",
+         "#endif",
+         "    os << #{$version ? "\"" + $version + "\"" : "PACKAGE_VERSION"} << \"\\n\";",
+         "  }")
+  
+  # Dump
+  h.puts("  void dump(std::ostream &os = std::cout) {")
+  ($options + $args).each { |o| h.puts("    os << #{o.dump.join(" << ")} << \"\\n\";") }
+  h.puts("  }")
+
+  # Private methods
+  h.puts(<<EOS)
+private:
+  template<typename T>
+  T conv_int(const char *str, std::string &err) {
+    char *endptr = 0;
+    errno = 0;
+    long long int res = strtoll(str, &endptr, 0);
+    if(errno) {
+      err.assign(strerror(errno));
+      return (T)0;
+    }
+    if(*endptr != '\\0') {
+      err.assign("Invalid character");
+      return (T)0;
+    }
+    if(res > std::numeric_limits<T>::max() || 
+       res < std::numeric_limits<T>::min()) {
+      err.assign("Value out of range");
+      return (T)0;
+    }
+    return (T)res;
+  }
+  template<typename T>
+  T conv_uint(const char *str, std::string &err) {
+    char *endptr = 0;
+    errno = 0;
+    while(isspace(*str)) { ++str; }
+    if(*str == '-') {
+      err.assign("Negative value");
+      return (T)0;
+    }
+    unsigned long long int res = strtoull(str, &endptr, 0);
+    if(errno) {
+      err.assign(strerror(errno));
+      return (T)0;
+    }
+    if(*endptr != '\\0') {
+      err.assign("Invalid character");
+      return (T)0;
+    }
+    if(res > std::numeric_limits<T>::max() || 
+       res < std::numeric_limits<T>::min()) {
+      err.assign("Value out of range");
+      return (T)0;
+    }
+    return (T)res;
+  }
+  double conv_double(const char *str, std::string &err) {
+    char *endptr = 0;
+    errno = 0;
+    double res = strtod(str, &endptr);
+    if(errno) {
+      err.assign(strerror(errno));
+      return (double)0.0;
+    }
+    if(*endptr != '\\0') {
+      err.assign("Invalid character");
+      return (double)0.0;
+    }
+    return res;
+  }
+
+  template<typename T>
+  std::string vec_str(const std::vector<T> &vec) {
+    std::ostringstream os;
+    for(typename std::vector<T>::const_iterator it = vec.begin();
+        it != vec.end(); ++it) {
+      if(it != vec.begin())
+        os << ",";
+      os << *it;
+    }
+    return os.str();
+  }
+};
+
+#endif // __#{class_name.upcase}_HPP__"
+EOS
 end
 
 load(ARGV[0])
-class_name = File.basename(ARGV[0])
-open(class_name + ".hpp", "w") do |header|
-  output_cpp_parser(header, class_name)
-end
+fsplit = File.basename(ARGV[0]).split(/\./)
+class_name = fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
+output_cpp_parser(STDOUT, class_name)
+
