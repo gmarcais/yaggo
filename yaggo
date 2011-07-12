@@ -12,14 +12,13 @@ class NoTarget
 end
 $target = NoTarget.new
 
+def output str; $output = str; end
+def name str; $class = str; end
+def name str; $class = str; end
 def purpose str; $purpose = str; end
-def purpose= str; $purpose = str; end
 def package str; $package = str; end
-def package= str; $package = str; end
 def description str; $target.description = str; end
-def description= str; $target.description = str; end
 def version str; $version = str; end
-def version= str; $version = str; end
 
 def int32; $target.type = :int32; end
 def int64; $target.type = :int64; end
@@ -33,20 +32,20 @@ def flag; $target.type = :flag; end
 def on; $target.default = "true"; end
 def off; $target.default = "false"; end
 def default str; $target.default = str; end
-def default= str; $target.default = str; end
 def typestr str; $target.typestr = str; end
-def typestr= str; $target.typestr = str; end
 def multiple; $target.multiple = true; end
 def at_least n; $target.at_least = n; end
 
-$typejust = 30;
+$typejust = 30
+$switchesjust = 40
+
 $type_to_C_type = { 
   :uint32 => "uint32_t",
   :uint64 => "uint64_t",
   :int32 => "int32_t",
   :int64 => "int64_t",
   :double => "double",
-  :string => "std::string",
+  :string => "string",
 }
 $type_default = {
   :uint32 => "0",
@@ -60,14 +59,22 @@ $type_default = {
 def str_conv(arg, type)
   case type
   when :string
-    "std::string(#{arg})"
+    "string(#{arg})"
   when :uint32, :uint64
-    "conv_uint<#{@type}_t>((const char *)#{arg}, err)"
+    "conv_uint<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
   when :int32, :int64
-    "conv_int<#{@type}_t>((const char *)#{arg}, err)"
+    "conv_int<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
   when :double
     "conv_double((const char *)#{arg}, err)"
   end
+end
+
+def default_val(val, type)
+  res = ""
+  res += '"' if @type == :string
+  res += val || $type_default[@type]
+  res += '"' if @type == :string
+  res
 end
 
 class Option
@@ -113,11 +120,7 @@ class Option
 
   def init
     s = "#{@var}_#{@type == :flag ? "flag" : "arg"}("
-    unless @multiple
-      s += (@type == :string ? "\"" : "") +
-        (@default || $type_default[@type]) +
-        (@type == :string ? "\"" : "")
-    end
+    s += default_val(@default, @type) unless @multiple
     s += ")"
     unless @type == :flag
       s += ", #{@var}_given(false)"
@@ -166,18 +169,10 @@ class Option
     when :string
       a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
             : "#{@var}_arg.assign(optarg);")
-    when :uint32, :uint64
+    when :uint32, :uint64, :int32, :int64, :double
       a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
             : "#{@var}_arg = #{str_conv("optarg", @type)};")
       a << "CHECK_ERR(#{@type}_t, optarg, \"#{switches}\")" 
-    when :int32, :int64
-      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
-            : "#{@var}_arg = #{str_conv("optarg", @type)};")
-      a << "CHECK_ERR(#{@type}_t, optarg, \"#{switches}\")" 
-    when :double
-      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
-            : "#{@var}_arg = #{str_conv("optarg", @type)};")
-      a << "CHECK_ERR(#{@type}, optarg, \"#{switches}\")" 
     end
     a
   end
@@ -263,6 +258,7 @@ def output_cpp_parser(h, class_name)
     raise "Only last arg can be marked 'multiple'"
   end
 
+  # Headers
   h.puts(<<EOS)
 #ifndef __#{class_name.upcase()}_HPP__
 #define __#{class_name.upcase()}_HPP__
@@ -272,15 +268,42 @@ def output_cpp_parser(h, class_name)
 #include <getopt.h>
 #include <errno.h>
 #include <string.h>
+#include <stdexcept>
 #include <string>
 #include <limits>
 #include <vector>
 #include <iostream>
 #include <sstream>
+EOS
 
+  # String sub-class
+  h.puts(<<EOS)
 class #{class_name} {
 public:
+  class string : public std::string {
+  public:
+    string() : std::string() {}
+    string(const std::string &s) : std::string(s) {}
+    string(const char *s) : std::string(s) {}
 EOS
+      
+  [:uint32, :uint64, :int32, :int64, :double].each { |type|
+    h.puts(<<EOS)
+    #{$type_to_C_type[type]} as_#{type}() const {
+      std::string err;
+      #{$type_to_C_type[type]} res = #{str_conv("this->c_str()", type)};
+      if(!err.empty()) {
+        std::string msg("Invalid conversion of '");
+        msg += *this;
+        msg += "' to #{type}_t: ";
+        msg += err;
+        throw std::runtime_error(msg);
+      }
+      return res;
+    }
+EOS
+  }
+  h.puts("  };")
 
   ($options + $args).each { |o| h.puts("  " + o.var_decl.join("\n  ")) }
   h.puts("")
@@ -289,7 +312,7 @@ EOS
   only_long = $options.map { |o| o.long_enum }.compact
   h.print("  enum {\n    FULL_HELP_OPT = 1000,\n    USAGE_OPT")
   if only_long.empty?
-    h.puts("\n };")
+    h.puts("\n  };")
   else
     h.puts(",", "    " + only_long.join(",\n    "), "  };")
   end
@@ -382,7 +405,7 @@ EOS
 
   # Usage
   h.puts(<<EOS)
-  void print_usage(std::ostream &os = std::cout) {
+  void print_usage(std::ostream &os = std::cout) const {
     os << "Usage: #{$package || class_name} [options]"
 EOS
   $args.each { |a|
@@ -394,22 +417,28 @@ EOS
 EOS
 
   # Help
-  h.puts("  void print_help(bool hidden = false, std::ostream &os = std::cout) {",
+  h.puts("  void print_help(bool hidden = false, std::ostream &os = std::cout) const {",
          "    os << \"#{$description || "No description"}\" << \"\\n\\n\"",
          "       << \"Options (default value in (), *required):\\n\";")
   $options.each { |o|
     # need to be improved. break lines if too long
     h.puts("    if(hidden)") if o.hidden
+    s = " " + o.switches
+    if s.size >= $switchesjust
+      s += "\\n" + "".ljust($switchesjust)
+    else
+      s = s.ljust(40)
+    end
     h.puts("    " + (o.hidden ? "  " : "") +
-           "os << \" #{o.switches.ljust(40)}#{o.help}\\n\";") 
+           "os << \"#{s}#{o.help}\\n\";") 
   }
-  h.puts("    os << \" #{"-h, --help".ljust(40)} This message\\n\";",
-         "    os << \" #{"    --full-help".ljust(40)} Detailed help\\n\";",
-         "    os << \" #{"-V, --version".ljust(40)} Version\\n\";")
+  h.puts("    os << \"#{" -h, --help".ljust($switchesjust)} This message\\n\";",
+         "    os << \"#{"     --full-help".ljust($switchesjust)} Detailed help\\n\";",
+         "    os << \"#{" -V, --version".ljust($switchesjust)} Version\\n\";")
   h.puts("  }")
 
   # Version
-  h.puts("  void print_version(std::ostream &os = std::cout) {",
+  h.puts("  void print_version(std::ostream &os = std::cout) const {",
          "#ifndef PACKAGE_VERSION",
          "#define PACKAGE_VERSION \"0.0.0\"",
          "#endif",
@@ -425,7 +454,7 @@ EOS
   h.puts(<<EOS)
 private:
   template<typename T>
-  T conv_int(const char *str, std::string &err) {
+  static T conv_int(const char *str, std::string &err) {
     char *endptr = 0;
     errno = 0;
     long long int res = strtoll(str, &endptr, 0);
@@ -445,7 +474,7 @@ private:
     return (T)res;
   }
   template<typename T>
-  T conv_uint(const char *str, std::string &err) {
+  static T conv_uint(const char *str, std::string &err) {
     char *endptr = 0;
     errno = 0;
     while(isspace(*str)) { ++str; }
@@ -469,7 +498,7 @@ private:
     }
     return (T)res;
   }
-  double conv_double(const char *str, std::string &err) {
+  static double conv_double(const char *str, std::string &err) {
     char *endptr = 0;
     errno = 0;
     double res = strtod(str, &endptr);
@@ -485,7 +514,7 @@ private:
   }
 
   template<typename T>
-  std::string vec_str(const std::vector<T> &vec) {
+  static std::string vec_str(const std::vector<T> &vec) {
     std::ostringstream os;
     for(typename std::vector<T>::const_iterator it = vec.begin();
         it != vec.end(); ++it) {
@@ -503,6 +532,12 @@ end
 
 load(ARGV[0])
 fsplit = File.basename(ARGV[0]).split(/\./)
-class_name = fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
-output_cpp_parser(STDOUT, class_name)
+$class ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
+
+begin
+  out_fd = $output ? open($output, "w") : STDOUT
+  output_cpp_parser(out_fd, $class)
+ensure
+  out_fd.close if out_fd
+end
 

@@ -3,6 +3,9 @@ package "jellyfish count"
 description "Count k-mers in fasta or fastq files."
 version "0.0.1"
 
+output "count_cmdline.hpp"
+name "count_cmdline"
+
 option("mer-len", "m") {
   uint32; required; description "Length of mer"
 }
@@ -38,7 +41,10 @@ option("double") {
   double; multiple
   description "Many doubles"
 }
-
+option("verra") {
+  typestr "who knows but it is way too long anyhow."
+  description "On verra"
+}
 arg("first") {
   string; typestr "path"
   at_least 2
