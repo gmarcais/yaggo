@@ -167,11 +167,9 @@ class Option
     a = ["#{@var}_given = true;"]
     case @type
     when :string
-      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
-            : "#{@var}_arg.assign(optarg);")
+      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});" : "#{@var}_arg.assign(optarg);")
     when :uint32, :uint64, :int32, :int64, :double
-      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});"
-            : "#{@var}_arg = #{str_conv("optarg", @type)};")
+      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});" : "#{@var}_arg = #{str_conv("optarg", @type)};")
       a << "CHECK_ERR(#{@type}_t, optarg, \"#{switches}\")" 
     end
     a
