@@ -1,5 +1,224 @@
 #! /usr/bin/env ruby
 
+require 'optparse'
+
+options = {
+  :output => "/dev/fd/1",
+  :lib => false,
+}
+parser = OptionParser.new do |o|
+  o.banner = "Usage: #{$0} [options] [file.yaggo]"
+  o.separator ""
+  o.separator "Specific options:"
+
+  o.on("-l", "--lib", "Output yagoo.{cpp,hpp}") {
+    options[:lib] = true
+  }
+  o.on("-o", "--output FILE", "Output file") { |v|
+    options[:output] = v
+  }
+
+  o.on_tail("-h", "--help", "Show this message") {
+    puts o
+    exit 0
+  }
+end
+parser.parse! ARGV
+
+$typejust = 30
+$switchesjust = 40
+
+$type_to_C_type = { 
+  :uint32 => "uint32_t",
+  :uint64 => "uint64_t",
+  :int32 => "int32_t",
+  :int64 => "int64_t",
+  :double => "double",
+  :string => "string",
+}
+$type_default = {
+  :uint32 => "0",
+  :uint64 => "0",
+  :int32 => "0",
+  :int64 => "0",
+  :double => "0.0d",
+  :string => "",
+}
+def str_conv(arg, type)
+  case type
+  when :string
+    "string(#{arg})"
+  when :uint32, :uint64
+    "conv_uint<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
+  when :int32, :int64
+    "conv_int<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
+  when :double
+    "conv_double((const char *)#{arg}, err)"
+  end
+end
+
+##############################
+# Output library
+##############################
+if options[:lib]
+  open("yaggo.hpp", "w") do |fd|
+    fd.puts(<<EOS)
+#ifndef __YAGGO_HPP__
+#define __YAGGO_HPP__
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <getopt.h>
+#include <errno.h>
+#include <string.h>
+#include <stdexcept>
+#include <string>
+#include <limits>
+#include <vector>
+#include <iostream>
+#include <sstream>
+
+namespace yaggo {
+  class string : public std::string {
+  public:
+    string() : std::string() {}
+    string(const std::string &s) : std::string(s) {}
+    string(const char *s) : std::string(s) {}
+EOS
+      
+      [:uint32, :uint64, :int32, :int64, :double].each do |type|
+        fd.puts(<<EOS)
+    #{$type_to_C_type[type]} as_#{type}() const;
+EOS
+      end
+      fd.puts(<<EOS)
+  };
+
+  static double conv_double(const char *str, std::string &err);
+
+  template<typename T>
+  static T conv_int(const char *str, std::string &err) {
+    char *endptr = 0;
+    errno = 0;
+    long long int res = strtoll(str, &endptr, 0);
+    if(errno) {
+      err.assign(strerror(errno));
+      return (T)0;
+    }
+    if(*endptr != '\0') {
+      err.assign("Invalid character");
+      return (T)0;
+    }
+    if(res > std::numeric_limits<T>::max() || 
+       res < std::numeric_limits<T>::min()) {
+      err.assign("Value out of range");
+      return (T)0;
+    }
+    return (T)res;
+  }
+
+  template<typename T>
+  static T conv_uint(const char *str, std::string &err) {
+    char *endptr = 0;
+    errno = 0;
+    while(isspace(*str)) { ++str; }
+    if(*str == '-') {
+      err.assign("Negative value");
+      return (T)0;
+    }
+    unsigned long long int res = strtoull(str, &endptr, 0);
+    if(errno) {
+      err.assign(strerror(errno));
+      return (T)0;
+    }
+    if(*endptr != '\0') {
+      err.assign("Invalid character");
+      return (T)0;
+    }
+    if(res > std::numeric_limits<T>::max() || 
+       res < std::numeric_limits<T>::min()) {
+      err.assign("Value out of range");
+      return (T)0;
+    }
+    return (T)res;
+  }
+
+  template<typename T>
+  static std::string vec_str(const std::vector<T> &vec) {
+    std::ostringstream os;
+    for(typename std::vector<T>::const_iterator it = vec.begin();
+        it != vec.end(); ++it) {
+      if(it != vec.begin())
+        os << ",";
+      os << *it;
+    }
+    return os.str();
+  }
+  
+}
+
+#endif
+EOS
+
+    end 
+  
+  open("yaggo.cpp", "w") do |fd|
+    fd.puts(<<EOS)
+#include <yaggo.hpp>
+
+namespace yaggo {
+EOS
+
+    [:uint32, :uint64, :int32, :int64, :double].each do |type|
+      fd.puts(<<EOS)
+  #{$type_to_C_type[type]} string::as_#{type}() {
+    std::string err;
+    #{$type_to_C_type[type]} res = #{str_conv("this->c_str()", type)};
+    if(!err.empty()) {
+      std::string msg("Invalid conversion of '");
+      msg += *this;
+      msg += "' to #{type}_t: ";
+      msg += err;
+      throw std::runtime_error(msg);
+    }
+    return res;
+  }
+
+EOS
+    end
+
+    fd.puts(<<EOS)
+  static double conv_double(const char *str, std::string &err) {
+    char *endptr = 0;
+    errno = 0;
+    double res = strtod(str, &endptr);
+    if(errno) {
+      err.assign(strerror(errno));
+      return (double)0.0;
+    }
+    if(*endptr != '\\0') {
+      err.assign("Invalid character");
+      return (double)0.0;
+    }
+    return res;
+  }
+}
+EOS
+
+  end
+
+  exit 0
+end
+
+##############################
+# Process an input file
+##############################
+
+if ARGV.size != 1
+  STDERR.puts "Error: need 1 and only 1 input yaggo file", parser
+  exit 1
+end
+
 $options = []
 $args = []
 
@@ -12,7 +231,7 @@ class NoTarget
 end
 $target = NoTarget.new
 
-def output str; $output = str; end
+def output str; options[:output] = str; end
 def name str; $class = str; end
 def name str; $class = str; end
 def purpose str; $purpose = str; end
@@ -35,39 +254,6 @@ def default str; $target.default = str; end
 def typestr str; $target.typestr = str; end
 def multiple; $target.multiple = true; end
 def at_least n; $target.at_least = n; end
-
-$typejust = 30
-$switchesjust = 40
-
-$type_to_C_type = { 
-  :uint32 => "uint32_t",
-  :uint64 => "uint64_t",
-  :int32 => "int32_t",
-  :int64 => "int64_t",
-  :double => "double",
-  :string => "string",
-}
-$type_default = {
-  :uint32 => "0",
-  :uint64 => "0",
-  :int32 => "0",
-  :int64 => "0",
-  :double => "0.0d",
-  :string => "",
-}
-
-def str_conv(arg, type)
-  case type
-  when :string
-    "string(#{arg})"
-  when :uint32, :uint64
-    "conv_uint<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
-  when :int32, :int64
-    "conv_int<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
-  when :double
-    "conv_double((const char *)#{arg}, err)"
-  end
-end
 
 def default_val(val, type)
   res = ""
@@ -261,47 +447,11 @@ def output_cpp_parser(h, class_name)
 #ifndef __#{class_name.upcase()}_HPP__
 #define __#{class_name.upcase()}_HPP__
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <getopt.h>
-#include <errno.h>
-#include <string.h>
-#include <stdexcept>
-#include <string>
-#include <limits>
-#include <vector>
-#include <iostream>
-#include <sstream>
-EOS
+#include <yaggo.hpp>
 
-  # String sub-class
-  h.puts(<<EOS)
 class #{class_name} {
 public:
-  class string : public std::string {
-  public:
-    string() : std::string() {}
-    string(const std::string &s) : std::string(s) {}
-    string(const char *s) : std::string(s) {}
 EOS
-      
-  [:uint32, :uint64, :int32, :int64, :double].each { |type|
-    h.puts(<<EOS)
-    #{$type_to_C_type[type]} as_#{type}() const {
-      std::string err;
-      #{$type_to_C_type[type]} res = #{str_conv("this->c_str()", type)};
-      if(!err.empty()) {
-        std::string msg("Invalid conversion of '");
-        msg += *this;
-        msg += "' to #{type}_t: ";
-        msg += err;
-        throw std::runtime_error(msg);
-      }
-      return res;
-    }
-EOS
-  }
-  h.puts("  };")
 
   ($options + $args).each { |o| h.puts("  " + o.var_decl.join("\n  ")) }
   h.puts("")
@@ -451,77 +601,6 @@ EOS
   # Private methods
   h.puts(<<EOS)
 private:
-  template<typename T>
-  static T conv_int(const char *str, std::string &err) {
-    char *endptr = 0;
-    errno = 0;
-    long long int res = strtoll(str, &endptr, 0);
-    if(errno) {
-      err.assign(strerror(errno));
-      return (T)0;
-    }
-    if(*endptr != '\\0') {
-      err.assign("Invalid character");
-      return (T)0;
-    }
-    if(res > std::numeric_limits<T>::max() || 
-       res < std::numeric_limits<T>::min()) {
-      err.assign("Value out of range");
-      return (T)0;
-    }
-    return (T)res;
-  }
-  template<typename T>
-  static T conv_uint(const char *str, std::string &err) {
-    char *endptr = 0;
-    errno = 0;
-    while(isspace(*str)) { ++str; }
-    if(*str == '-') {
-      err.assign("Negative value");
-      return (T)0;
-    }
-    unsigned long long int res = strtoull(str, &endptr, 0);
-    if(errno) {
-      err.assign(strerror(errno));
-      return (T)0;
-    }
-    if(*endptr != '\\0') {
-      err.assign("Invalid character");
-      return (T)0;
-    }
-    if(res > std::numeric_limits<T>::max() || 
-       res < std::numeric_limits<T>::min()) {
-      err.assign("Value out of range");
-      return (T)0;
-    }
-    return (T)res;
-  }
-  static double conv_double(const char *str, std::string &err) {
-    char *endptr = 0;
-    errno = 0;
-    double res = strtod(str, &endptr);
-    if(errno) {
-      err.assign(strerror(errno));
-      return (double)0.0;
-    }
-    if(*endptr != '\\0') {
-      err.assign("Invalid character");
-      return (double)0.0;
-    }
-    return res;
-  }
-
-  template<typename T>
-  static std::string vec_str(const std::vector<T> &vec) {
-    std::ostringstream os;
-    for(typename std::vector<T>::const_iterator it = vec.begin();
-        it != vec.end(); ++it) {
-      if(it != vec.begin())
-        os << ",";
-      os << *it;
-    }
-    return os.str();
-  }
 };
 
 #endif // __#{class_name.upcase}_HPP__"
@@ -533,9 +612,8 @@ fsplit = File.basename(ARGV[0]).split(/\./)
 $class ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
 
 begin
-  out_fd = $output ? open($output, "w") : STDOUT
+  out_fd = open(options[:output], "w")
   output_cpp_parser(out_fd, $class)
 ensure
   out_fd.close if out_fd
 end
-
