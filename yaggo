@@ -3,7 +3,6 @@
 require 'optparse'
 
 options = {
-  :output => "/dev/fd/1",
   :lib => false,
 }
 parser = OptionParser.new do |o|
@@ -14,9 +13,6 @@ parser = OptionParser.new do |o|
   o.on("-l", "--lib", "Output yagoo.{cpp,hpp}") {
     options[:lib] = true
   }
-  o.on("-o", "--output FILE", "Output file") { |v|
-    options[:output] = v
-  }
 
   o.on_tail("-h", "--help", "Show this message") {
     puts o
@@ -24,6 +20,10 @@ parser = OptionParser.new do |o|
   }
 end
 parser.parse! ARGV
+if !options[:lib] && ARGV.empty?
+  STDERR.puts "Error: some yaggo files and/or --lib switch", parser
+  exit 1
+end
 
 $typejust = 30
 $switchesjust = 40
@@ -34,7 +34,7 @@ $type_to_C_type = {
   :int32 => "int32_t",
   :int64 => "int64_t",
   :double => "double",
-  :string => "string",
+  :string => "yaggo::string",
 }
 $type_default = {
   :uint32 => "0",
@@ -47,13 +47,13 @@ $type_default = {
 def str_conv(arg, type)
   case type
   when :string
-    "string(#{arg})"
+    "yaggo::string(#{arg})"
   when :uint32, :uint64
-    "conv_uint<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
+    "yaggo::conv_uint<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
   when :int32, :int64
-    "conv_int<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
+    "yaggo::conv_int<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
   when :double
-    "conv_double((const char *)#{arg}, err)"
+    "yaggo::conv_double((const char *)#{arg}, err)"
   end
 end
 
@@ -94,7 +94,7 @@ EOS
       fd.puts(<<EOS)
   };
 
-  static double conv_double(const char *str, std::string &err);
+  double conv_double(const char *str, std::string &err);
 
   template<typename T>
   static T conv_int(const char *str, std::string &err) {
@@ -105,7 +105,7 @@ EOS
       err.assign(strerror(errno));
       return (T)0;
     }
-    if(*endptr != '\0') {
+    if(*endptr != '\\0') {
       err.assign("Invalid character");
       return (T)0;
     }
@@ -131,7 +131,7 @@ EOS
       err.assign(strerror(errno));
       return (T)0;
     }
-    if(*endptr != '\0') {
+    if(*endptr != '\\0') {
       err.assign("Invalid character");
       return (T)0;
     }
@@ -171,7 +171,7 @@ EOS
 
     [:uint32, :uint64, :int32, :int64, :double].each do |type|
       fd.puts(<<EOS)
-  #{$type_to_C_type[type]} string::as_#{type}() {
+  #{$type_to_C_type[type]} string::as_#{type}() const {
     std::string err;
     #{$type_to_C_type[type]} res = #{str_conv("this->c_str()", type)};
     if(!err.empty()) {
@@ -188,7 +188,7 @@ EOS
     end
 
     fd.puts(<<EOS)
-  static double conv_double(const char *str, std::string &err) {
+  double conv_double(const char *str, std::string &err) {
     char *endptr = 0;
     errno = 0;
     double res = strtod(str, &endptr);
@@ -206,19 +206,11 @@ EOS
 EOS
 
   end
-
-  exit 0
 end
 
 ##############################
-# Process an input file
+# Process an input files
 ##############################
-
-if ARGV.size != 1
-  STDERR.puts "Error: need 1 and only 1 input yaggo file", parser
-  exit 1
-end
-
 $options = []
 $args = []
 
@@ -231,7 +223,7 @@ class NoTarget
 end
 $target = NoTarget.new
 
-def output str; options[:output] = str; end
+def output str; $output = str; end
 def name str; $class = str; end
 def name str; $class = str; end
 def purpose str; $purpose = str; end
@@ -344,7 +336,7 @@ class Option
       ["\"#{@var}_flag:\"", "#{@var}_flag"]
     else
       ["\"#{@var}_given:\"", "#{@var}_given", 
-       "\" #{@var}_arg:\"", @multiple ? "vec_str(#{@var}_arg)" : "#{@var}_arg"]
+       "\" #{@var}_arg:\"", @multiple ? "yaggo::vec_str(#{@var}_arg)" : "#{@var}_arg"]
     end
   end
 
@@ -383,7 +375,7 @@ class Arg
 
   def dump
     ["\"#{@name}_arg:\"",
-     @multiple ? "vec_str(#{@name}_arg)" : "#{@name}_arg"]
+     @multiple ? "yaggo::vec_str(#{@name}_arg)" : "#{@name}_arg"]
   end
 
   def parse_arg
@@ -607,13 +599,21 @@ private:
 EOS
 end
 
-load(ARGV[0])
-fsplit = File.basename(ARGV[0]).split(/\./)
-$class ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
+ARGV.each do |input_file|
+  p [Process.pid, input_file]
+  pid = fork do
+    p [Process.pid, input_file]
+    load(input_file)
+    fsplit = File.basename(input_file).split(/\./)
+    $class ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
+    $output ||= intput_file.gsub(/\.yaggo$/, "") + ".hpp"
 
-begin
-  out_fd = open(options[:output], "w")
-  output_cpp_parser(out_fd, $class)
-ensure
-  out_fd.close if out_fd
+    begin
+      out_fd = open($output, "w")
+      output_cpp_parser(out_fd, $class)
+    ensure
+      out_fd.close if out_fd
+    end
+  end
+  Process.waitpid pid
 end
