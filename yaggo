@@ -44,16 +44,26 @@ $type_default = {
   :double => "0.0d",
   :string => "",
 }
-def str_conv(arg, type)
+def str_conv(arg, type, suffix)
+  si_suffix = case suffix
+              when true
+                "true"
+              when false
+                "false"
+              when String
+                suffix
+              else
+                raise "Invalid suffix specifier"
+              end
   case type
   when :string
     "yaggo::string(#{arg})"
   when :uint32, :uint64
-    "yaggo::conv_uint<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
+    "yaggo::conv_uint<#{$type_to_C_type[type]}>((const char *)#{arg}, err, #{si_suffix})"
   when :int32, :int64
-    "yaggo::conv_int<#{$type_to_C_type[type]}>((const char *)#{arg}, err)"
+    "yaggo::conv_int<#{$type_to_C_type[type]}>((const char *)#{arg}, err, #{si_suffix})"
   when :double
-    "yaggo::conv_double((const char *)#{arg}, err)"
+    "yaggo::conv_double((const char *)#{arg}, err, #{si_suffix})"
   end
 end
 
@@ -88,16 +98,37 @@ EOS
       
       [:uint32, :uint64, :int32, :int64, :double].each do |type|
         fd.puts(<<EOS)
-    #{$type_to_C_type[type]} as_#{type}() const;
+    #{$type_to_C_type[type]} as_#{type}_suffix() const { return as_#{type}(true); }
+    #{$type_to_C_type[type]} as_#{type}(bool si_suffix = false) const;
 EOS
       end
       fd.puts(<<EOS)
   };
 
-  double conv_double(const char *str, std::string &err);
+  bool adjust_double_si_suffix(double &res, const char *unit);
+  double conv_double(const char *str, std::string &err, bool si_suffix);
 
   template<typename T>
-  static T conv_int(const char *str, std::string &err) {
+  static bool adjust_int_si_suffix(T &res, const char *suffix) {
+    if(*suffix == '\\0')
+      return true;
+    if(*(suffix + 1) != '\\0')
+      return false;
+
+    switch(*suffix) {
+    case 'k': res *= (T)1000; break;
+    case 'M': res *= (T)1000000; break;
+    case 'G': res *= (T)1000000000; break;
+    case 'T': res *= (T)1000000000000; break;
+    case 'P': res *= (T)1000000000000000; break;
+    case 'E': res *= (T)1000000000000000000; break;
+    default: return false;
+    }
+    return true;
+  }
+
+  template<typename T>
+  static T conv_int(const char *str, std::string &err, bool si_suffix) {
     char *endptr = 0;
     errno = 0;
     long long int res = strtoll(str, &endptr, 0);
@@ -105,7 +136,9 @@ EOS
       err.assign(strerror(errno));
       return (T)0;
     }
-    if(*endptr != '\\0') {
+    bool invalid = 
+      si_suffix ? !adjust_int_si_suffix(res, endptr) : *endptr != '\\0';
+    if(invalid) {
       err.assign("Invalid character");
       return (T)0;
     }
@@ -118,7 +151,7 @@ EOS
   }
 
   template<typename T>
-  static T conv_uint(const char *str, std::string &err) {
+  static T conv_uint(const char *str, std::string &err, bool si_suffix) {
     char *endptr = 0;
     errno = 0;
     while(isspace(*str)) { ++str; }
@@ -131,7 +164,9 @@ EOS
       err.assign(strerror(errno));
       return (T)0;
     }
-    if(*endptr != '\\0') {
+    bool invalid =
+      si_suffix ? !adjust_int_si_suffix(res, endptr) : *endptr != '\\0';
+    if(invalid) {
       err.assign("Invalid character");
       return (T)0;
     }
@@ -171,9 +206,9 @@ EOS
 
     [:uint32, :uint64, :int32, :int64, :double].each do |type|
       fd.puts(<<EOS)
-  #{$type_to_C_type[type]} string::as_#{type}() const {
+  #{$type_to_C_type[type]} string::as_#{type}(bool si_suffix) const {
     std::string err;
-    #{$type_to_C_type[type]} res = #{str_conv("this->c_str()", type)};
+    #{$type_to_C_type[type]} res = #{str_conv("this->c_str()", type, "si_suffix")};
     if(!err.empty()) {
       std::string msg("Invalid conversion of '");
       msg += *this;
@@ -188,7 +223,31 @@ EOS
     end
 
     fd.puts(<<EOS)
-  double conv_double(const char *str, std::string &err) {
+  bool adjust_double_si_suffix(double &res, const char *suffix) {
+    if(*suffix == '\\0')
+      return true;
+    if(*(suffix + 1) != '\\0')
+      return false;
+
+    switch(*suffix) {
+    case 'a': res *= 1e-18d; break;
+    case 'f': res *= 1e-15d; break;
+    case 'p': res *= 1e-12d; break;
+    case 'n': res *= 1e-9d;  break;
+    case 'u': res *= 1e-6d;  break;
+    case 'm': res *= 1e-3d;  break;
+    case 'k': res *= 1e3d;   break;
+    case 'M': res *= 1e6d;   break;
+    case 'G': res *= 1e9d;   break;
+    case 'T': res *= 1e12d;  break;
+    case 'P': res *= 1e15d;  break;
+    case 'E': res *= 1e18d;  break;
+    default: return false;
+    }
+    return true;
+  }
+
+  double conv_double(const char *str, std::string &err, bool si_suffix) {
     char *endptr = 0;
     errno = 0;
     double res = strtod(str, &endptr);
@@ -196,7 +255,9 @@ EOS
       err.assign(strerror(errno));
       return (double)0.0;
     }
-    if(*endptr != '\\0') {
+    bool invalid =
+      si_suffix ? !adjust_double_si_suffix(res, endptr) : *endptr != '\\0';
+    if(invalid) {
       err.assign("Invalid character");
       return (double)0.0;
     }
@@ -236,6 +297,7 @@ def int64; $target.type = :int64; end
 def uint32; $target.type = :uint32; end
 def uint64; $target.type = :uint64; end
 def double; $target.type = :double; end
+def suffix; $target.suffix = true; end
 def string; $target.type = :string; end
 def required; $target.required = true; end
 def hidden; $target.hidden = true; end
@@ -257,28 +319,31 @@ end
 
 class Option
   attr_accessor :description, :type, :required, :default, :typestr
-  attr_accessor :hidden, :multiple
+  attr_accessor :hidden, :multiple, :suffix
   attr_reader :long, :short, :var
 
   def initialize(long, short)
     @long, @short = long, short
     @var = (@long || @short).gsub(/[^a-zA-Z0-9_]/, "_")
     @type = :string
+    @suffix = false
   end
 
   def check
+    pref = "Option #{long || ""}|#{short || ""}:"
     case @type
       when :uint32, :uint64
       @default.nil? || @default =~ /\d+/ or
-        raise "Invalid unsigned integer #{@default} for #{@long || @short}"
+        raise "#{pref} Invalid unsigned integer #{@default} for #{@long || @short}"
       when :int32, :int64
       @default.nil? || @default =~ /[+-]?\d+/ or
-        raise "Invalid integer #{@default} for #{@long || @short}"
+        raise "#{pref} Invalid integer #{@default} for #{@long || @short}"
       when :double
       @default.nil? || @default =~ /[+-][\d.]+([eE][+-]?\d+)?/ or
-        raise "Invalid double #{@default} for #{@long || @short}"
+        raise "#{pref} Invalid double #{@default} for #{@long || @short}"
       when :flag
-      raise "A flag cannot be declared multiple" if @multiple
+      raise "#{pref} A flag cannot be declared multiple" if @multiple
+      raise "#{pref} Suffix is meaningless for a flag" if @suffix
     end
   end
 
@@ -345,9 +410,9 @@ class Option
     a = ["#{@var}_given = true;"]
     case @type
     when :string
-      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});" : "#{@var}_arg.assign(optarg);")
+      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type, false)});" : "#{@var}_arg.assign(optarg);")
     when :uint32, :uint64, :int32, :int64, :double
-      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type)});" : "#{@var}_arg = #{str_conv("optarg", @type)};")
+      a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type, @suffix)});" : "#{@var}_arg = #{str_conv("optarg", @type, @suffix)};")
       a << "CHECK_ERR(#{@type}_t, optarg, \"#{switches}\")" 
     end
     a
@@ -356,11 +421,13 @@ end
 
 class Arg
   attr_accessor :description, :type, :default, :typestr, :multiple, :at_least
+  attr_accessor :suffix
   attr_reader :name
   def initialize(str)
     @name = str
     @type = :string
     @at_least = 0
+    @suffix = false
   end
 
   def check; true; end
@@ -383,10 +450,10 @@ class Arg
     off = ""
     if @multiple
       a << "for( ; optind < argc; ++optind) {"
-      a << "  #{@name}_arg.push_back(#{str_conv("argv[optind]", @type)});"
+      a << "  #{@name}_arg.push_back(#{str_conv("argv[optind]", @type, @suffix)});"
       off = "  "
     else
-      a << "#{@name}_arg = #{str_conv("argv[optind]", @type)};"
+      a << "#{@name}_arg = #{str_conv("argv[optind]", @type, @suffix)};"
     end
     a << (off + "CHECK_ERR(#{@type}_t, argv[optind], \"#{@name}\")")
     a << (@multiple ? "}" : "++optind;")

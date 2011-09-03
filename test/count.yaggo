@@ -10,7 +10,7 @@ option("mer-len", "m") {
   uint32; required; description "Length of mer"
 }
 option("size", "s") {
-  uint64; required; description "Hash size"
+  uint64; required; suffix; description "Hash size"
 }
 option("threads", "t") {
   uint32; default "1"; description "Number of threads"
@@ -30,7 +30,7 @@ option("both-strands", "C") {
   flag; off; description "Count both strand, canonical representation"
 }
 option("lib") {
-  string; multiple
+  string; multiple; suffix
   description "Boggus lib"
 }
 option("numbers") {
@@ -38,7 +38,7 @@ option("numbers") {
   description "Many ints"
 }
 option("double") {
-  double; multiple
+  double; multiple; suffix
   description "Many doubles"
 }
 option("verra") {
