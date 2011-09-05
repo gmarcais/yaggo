@@ -4,15 +4,24 @@ require 'optparse'
 
 options = {
   :lib => false,
+  :prefix => nil,
+  :local => false,
 }
 parser = OptionParser.new do |o|
   o.banner = "Usage: #{$0} [options] [file.yaggo]"
   o.separator ""
   o.separator "Specific options:"
 
-  o.on("-l", "--lib", "Output yagoo.{cpp,hpp}") {
+  o.on("-l", "--lib", "Output yaggo.{cpp,hpp}") {
     options[:lib] = true
   }
+  o.on("-p", "--prefix PATH", "Prefix to include yaggo.hpp") { |v|
+    options[:prefix] = v
+  }
+  o.on("--local", "Local include (#include \"...\")") {
+    options[:local] = true
+  }
+
 
   o.on_tail("-h", "--help", "Show this message") {
     puts o
@@ -66,6 +75,15 @@ def str_conv(arg, type, suffix)
     "yaggo::conv_double((const char *)#{arg}, err, #{si_suffix})"
   end
 end
+
+$inc_path = options[:local] ? '"' : '<'
+if options[:prefix]
+  $inc_path += File.join(options[:prefix], "yaggo.hpp")
+else
+  $inc_path += "yaggo.hpp"
+end
+$inc_path += options[:local] ? '"' : '>'
+
 
 ##############################
 # Output library
@@ -199,7 +217,7 @@ EOS
   
   open("yaggo.cpp", "w") do |fd|
     fd.puts(<<EOS)
-#include <yaggo.hpp>
+#include #{$inc_path}
 
 namespace yaggo {
 EOS
@@ -502,11 +520,12 @@ def output_cpp_parser(h, class_name)
   end
 
   # Headers
+
   h.puts(<<EOS)
 #ifndef __#{class_name.upcase()}_HPP__
 #define __#{class_name.upcase()}_HPP__
 
-#include <yaggo.hpp>
+#include #{$inc_path}
 
 class #{class_name} {
 public:
@@ -667,9 +686,7 @@ EOS
 end
 
 ARGV.each do |input_file|
-  p [Process.pid, input_file]
   pid = fork do
-    p [Process.pid, input_file]
     load(input_file)
     fsplit = File.basename(input_file).split(/\./)
     $class ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
