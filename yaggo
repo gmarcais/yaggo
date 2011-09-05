@@ -76,6 +76,7 @@ def str_conv(arg, type, suffix)
   end
 end
 
+# Path to include yaggo.hpp in C
 $inc_path = options[:local] ? '"' : '<'
 if options[:prefix]
   $inc_path += File.join(options[:prefix], "yaggo.hpp")
@@ -83,7 +84,6 @@ else
   $inc_path += "yaggo.hpp"
 end
 $inc_path += options[:local] ? '"' : '>'
-
 
 ##############################
 # Output library
@@ -473,7 +473,9 @@ class Arg
     else
       a << "#{@name}_arg = #{str_conv("argv[optind]", @type, @suffix)};"
     end
-    a << (off + "CHECK_ERR(#{@type}_t, argv[optind], \"#{@name}\")")
+    unless @type == :string
+      a << (off + "CHECK_ERR(#{@type}_t, argv[optind], \"#{@name}\")")
+    end
     a << (@multiple ? "}" : "++optind;")
     a
   end
@@ -556,9 +558,11 @@ EOS
          "      {0, 0, 0, 0}", "    };")
   short_str = $options.map { |o| o.short_str }.compact.join("")
   h.puts("    static const char *short_options = \"hV#{short_str}\";", "")
-  if $options.any? { |o| o.type != :flag && o.type != :string }
-    h.puts("    std::string err;")
-  end
+
+  need_err   = $options.any? { |o| o.type != :flag && o.type != :string }
+  need_err ||= $args.any? { |a| a.type != :string }
+  h.puts("    std::string err;") if need_err
+
   # Actual parsing
   h.puts(<<EOS)
 #define CHECK_ERR(type,val,which) if(!err.empty()) { std::cerr << "Invalid " #type " '" << val << "' for [" which "]: " << err << "\\n"; exit(1); }
@@ -690,7 +694,7 @@ ARGV.each do |input_file|
     load(input_file)
     fsplit = File.basename(input_file).split(/\./)
     $class ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
-    $output ||= intput_file.gsub(/\.yaggo$/, "") + ".hpp"
+    $output ||= input_file.gsub(/\.yaggo$/, "") + ".hpp"
 
     begin
       out_fd = open($output, "w")
