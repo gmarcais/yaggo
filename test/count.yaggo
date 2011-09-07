@@ -24,10 +24,13 @@ option("counter-len", "c") {
   uint32; default "7"; typestr "Length in bits"
   description "Length of counting field"
 }
-option("out-counter-len") {
-  hidden; uint32; default "4"; typestr "Length in bytes"
-  description "Length of counter fiel in output"
+option("high", "h") {
+  flag; on; description "Am I high?"
 }
+# option("out-counter-len") {
+#   hidden; uint32; default "4"; typestr "Length in bytes"
+#   description "Length of counter fiel in output"
+# }
 option("both-strands", "C") {
   flag; off; description "Count both strand, canonical representation"
 }

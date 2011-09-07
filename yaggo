@@ -538,7 +538,12 @@ EOS
 
   # Create enum if option with no short version
   only_long = $options.map { |o| o.long_enum }.compact
-  h.print("  enum {\n    FULL_HELP_OPT = 1000,\n    USAGE_OPT")
+  need_full = $options.any? { |o| o.hidden }
+  help_no_h = $options.any? { |o| o.short == "h" }
+  version_no_V = $options.any? { |o| o.short == "V" }
+  h.print("  enum {\n    USAGE_OPT = 1000")
+  h.print(",\n    FULL_HELP_OPT") if need_full
+  h.print(",\n    HELP_OPT") if help_no_h
   if only_long.empty?
     h.puts("\n  };")
   else
@@ -551,9 +556,9 @@ EOS
   h.puts("  {",
          "    static struct option long_options[] = {")
   h.puts("      " + $options.map { |o| o.struct }.join(",\n      ") + ",")
-  h.puts("      {\"help\", 0, 0, 'h'},",
-         "      {\"full-help\", 0, 0, FULL_HELP_OPT},",
-         "      {\"usage\", 0, 0, USAGE_OPT},",
+  h.puts("      {\"help\", 0, 0, #{help_no_h ? "HELP_OPT" : "'h'"}},")
+  h.puts("      {\"full-help\", 0, 0, FULL_HELP_OPT},") if need_full
+  h.puts("      {\"usage\", 0, 0, USAGE_OPT},",
          "      {\"version\", 0, 0, 'V'},",
          "      {0, 0, 0, 0}", "    };")
   short_str = $options.map { |o| o.short_str }.compact.join("")
@@ -576,11 +581,8 @@ EOS
                   << (index == -1 ? std::string(1, (char)optopt) : std::string(long_options[index].name))
                   << std::endl;
         exit(1);
-      case 'h':
+      case #{help_no_h ? "HELP_OPT" : "'h'"}:
         std::cout << usage() << \"\\n\\n\" << help() << std::endl;
-        exit(0);
-      case FULL_HELP_OPT:
-        std::cout << usage() << \"\\n\\n\" << help() << \"\\n\\n\" << hidden() << std::endl;
         exit(0);
       case USAGE_OPT:
         std::cout << usage() << std::endl;
@@ -592,6 +594,13 @@ EOS
         std::cerr << \"Use --usage or --help for some help\\n\";
         exit(1);
 EOS
+  if need_full
+    h.puts(<<EOS)
+      case FULL_HELP_OPT:
+        std::cout << usage() << \"\\n\\n\" << help() << \"\\n\\n\" << hidden() << std::endl;
+        exit(0);
+EOS
+  end
   
   $options.each { |o|
     h.puts("      case #{o.long_enum || "'" + o.short + "'"}:",
@@ -655,10 +664,17 @@ EOS
     end
     h.puts("  \"#{s} #{o.help}\\n\" \\") 
   }
+  h.puts("  \"#{"     --usage".ljust($switchesjust)}  Usage\\n\" \\")
+  help_switch = " -h, "
+  help_switch = " " * help_switch.size if help_no_h
+  help_switch += "--help"
+  h.puts("  \"#{help_switch.ljust($switchesjust)}  This message\\n\" \\")
+  h.puts("  \"#{"     --full-help".ljust($switchesjust)}  Detailed help\\n\" \\") if need_full
+  version_switch = " -V, "
+  version_switch = " " * version_switch.size if version_no_V
+  version_switch += "--version"
   h.puts(<<EOS)
-  "#{" -h, --help".ljust($switchesjust)}  This message\\n" \\
-  "#{"     --full-help".ljust($switchesjust)}  Detailed help\\n" \\
-  "#{" -V, --version".ljust($switchesjust)}  Version"
+  "#{version_switch.ljust($switchesjust)}  Version"
 
   const char * help() const { return #{class_name}_HELP; }
 EOS
