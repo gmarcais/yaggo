@@ -248,18 +248,18 @@ EOS
       return false;
 
     switch(*suffix) {
-    case 'a': res *= 1e-18d; break;
-    case 'f': res *= 1e-15d; break;
-    case 'p': res *= 1e-12d; break;
-    case 'n': res *= 1e-9d;  break;
-    case 'u': res *= 1e-6d;  break;
-    case 'm': res *= 1e-3d;  break;
-    case 'k': res *= 1e3d;   break;
-    case 'M': res *= 1e6d;   break;
-    case 'G': res *= 1e9d;   break;
-    case 'T': res *= 1e12d;  break;
-    case 'P': res *= 1e15d;  break;
-    case 'E': res *= 1e18d;  break;
+    case 'a': res *= 1e-18; break;
+    case 'f': res *= 1e-15; break;
+    case 'p': res *= 1e-12; break;
+    case 'n': res *= 1e-9;  break;
+    case 'u': res *= 1e-6;  break;
+    case 'm': res *= 1e-3;  break;
+    case 'k': res *= 1e3;   break;
+    case 'M': res *= 1e6;   break;
+    case 'G': res *= 1e9;   break;
+    case 'T': res *= 1e12;  break;
+    case 'P': res *= 1e15;  break;
+    case 'E': res *= 1e18;  break;
     default: return false;
     }
     return true;
@@ -577,13 +577,13 @@ EOS
                   << std::endl;
         exit(1);
       case 'h':
-        print_usage(); std::cout << \"\\n\"; print_help();
+        std::cout << usage() << \"\\n\\n\" << help() << std::endl;
         exit(0);
       case FULL_HELP_OPT:
-        print_usage(); std::cout << \"\\n\"; print_help(true);
+        std::cout << usage() << \"\\n\\n\" << help() << \"\\n\\n\" << hidden() << std::endl;
         exit(0);
       case USAGE_OPT:
-        print_usage();
+        std::cout << usage() << std::endl;
         exit(0);
       case 'V':
         print_version();
@@ -605,28 +605,22 @@ EOS
   $options.each { |o|
     next unless o.required
     h.puts(<<EOS)
-    if(!#{o.var}_given) {
-      std::cerr << "[#{o.switches}] required switch\\n";
-      exit(1);
-    }
+    if(!#{o.var}_given)
+      error("[#{o.switches}] required switch");
 EOS
   }
   
   # Parse arguments
   if $args.size == 0 || !$args[-1].multiple
     h.puts(<<EOS)
-    if(argc - optind != #{$args.size}) {
-      std::cerr << "Requires exactly #{$args.size} argument#{$args.size > 1 ? "s" : ""}.\\n";
-      exit(1);
-    }
+    if(argc - optind != #{$args.size})
+      error("Requires exactly #{$args.size} argument#{$args.size > 1 ? "s" : ""}.");
 EOS
   else
     min_args = $args.size - 1 + $args[-1].at_least
     h.puts(<<EOS)
-    if(argc - optind < #{min_args}) {
-      std::cerr << "Requires at least #{min_args} argument#{min_args > 1 ? "s" : ""}.\\n";
-      exit(1);
-    }
+    if(argc - optind < #{min_args})
+      error("Requires at least #{min_args} argument#{min_args > 1 ? "s" : ""}.");
 EOS
   end
   $args.each { |a| h.puts("    " + a.parse_arg.join("\n    ")) }
@@ -634,38 +628,58 @@ EOS
   h.puts("  }") # close constructor
 
   # Usage
+  h.puts("#define #{class_name}_USAGE \"Usage: #{$package || class_name} [options]\" \\")
+  $args.collect { |a| h.puts("  \" #{a.name}:#{a.typestr || a.type}#{a.multiple ? "+" : ""}\" \\") }
   h.puts(<<EOS)
-  void print_usage(std::ostream &os = std::cout) const {
-    os << "Usage: #{$package || class_name} [options]"
-EOS
-  $args.each { |a|
-    h.puts("       << \" #{a.name}:#{a.typestr || a.type}#{a.multiple ? "+" : ""}\"")
-  }
-  h.puts(<<EOS)
-       << "\\n";
-  }
+  "\\nSee --help for more information."
+
+  const char * usage() const { return #{class_name}_USAGE; }
+  void error(const char *msg) { std::cerr << "Error: " << msg << \"\\n\" << usage() << std::endl; exit(1); }
 EOS
 
   # Help
-  h.puts("  void print_help(bool hidden = false, std::ostream &os = std::cout) const {",
-         "    os << \"#{$description || "No description"}\" << \"\\n\\n\"",
-         "       << \"Options (default value in (), *required):\\n\";")
+  h.puts(<<EOS)
+#define #{class_name}_HELP "#{$description || "No description"}\\n\\n" \\
+  "Options (default value in (), *required):\\n" \\
+EOS
   $options.each { |o|
     # need to be improved. break lines if too long
-    h.puts("    if(hidden)") if o.hidden
+    next if o.hidden
     s = " " + o.switches
     if s.size >= $switchesjust
       s += "\\n" + "".ljust($switchesjust)
     else
-      s = s.ljust(40)
+      s = s.ljust($switchesjust)
     end
-    h.puts("    " + (o.hidden ? "  " : "") +
-           "os << \"#{s}#{o.help}\\n\";") 
+    h.puts("  \"#{s} #{o.help}\\n\" \\") 
   }
-  h.puts("    os << \"#{" -h, --help".ljust($switchesjust)} This message\\n\";",
-         "    os << \"#{"     --full-help".ljust($switchesjust)} Detailed help\\n\";",
-         "    os << \"#{" -V, --version".ljust($switchesjust)} Version\\n\";")
-  h.puts("  }")
+  h.puts(<<EOS)
+  "#{" -h, --help".ljust($switchesjust)}  This message\\n" \\
+  "#{"     --full-help".ljust($switchesjust)}  Detailed help\\n" \\
+  "#{" -V, --version".ljust($switchesjust)}  Version"
+
+  const char * help() const { return #{class_name}_HELP; }
+EOS
+
+  # Hidden options
+  h.print("#define #{class_name}_HIDDEN \"Hidden options:")
+  $options.each { |o|
+    # need to be improved. break lines if too long
+    next unless o.hidden
+    s = " " + o.switches
+    if s.size >= $switchesjust
+      s += "\\n" + "".ljust($switchesjust)
+    else
+      s = s.ljust($switchesjust)
+    end
+    h.print("\\n\" \\\n  \"#{s} #{o.help}") 
+  }
+  h.puts(<<EOS)
+"
+
+  const char * hidden() const { return #{class_name}_HIDDEN; }
+EOS
+  
 
   # Version
   h.puts("  void print_version(std::ostream &os = std::cout) const {",
