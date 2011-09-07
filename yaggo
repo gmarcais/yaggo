@@ -638,8 +638,10 @@ EOS
 EOS
 
   # Help
+  $description ||= "No description"
+  desc = $description.split(/\n/).join("\\n\" \\\n  \"")
   h.puts(<<EOS)
-#define #{class_name}_HELP "#{$description || "No description"}\\n\\n" \\
+#define #{class_name}_HELP "#{desc}\\n\\n" \\
   "Options (default value in (), *required):\\n" \\
 EOS
   $options.each { |o|
