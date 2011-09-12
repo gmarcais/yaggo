@@ -585,7 +585,7 @@ EOS
         std::cout << usage() << \"\\n\\n\" << help() << std::endl;
         exit(0);
       case USAGE_OPT:
-        std::cout << usage() << std::endl;
+        std::cout << usage() << \"\\nUse --help for more information.\" << std::endl;
         exit(0);
       case 'V':
         print_version();
@@ -637,13 +637,19 @@ EOS
   h.puts("  }") # close constructor
 
   # Usage
-  h.puts("#define #{class_name}_USAGE \"Usage: #{$package || class_name} [options]\" \\")
-  $args.collect { |a| h.puts("  \" #{a.name}:#{a.typestr || a.type}#{a.multiple ? "+" : ""}\" \\") }
+  h.print("#define #{class_name}_USAGE \"Usage: #{$package || class_name} [options]")
+  $args.each { |a|
+    h.print(" #{a.name}:#{a.typestr || a.type}#{a.multiple ? "+" : ""}") 
+  }
+  h.puts("\"")
   h.puts(<<EOS)
-  "\\nSee --help for more information."
-
   const char * usage() const { return #{class_name}_USAGE; }
-  void error(const char *msg) { std::cerr << "Error: " << msg << \"\\n\" << usage() << std::endl; exit(1); }
+  void error(const char *msg) { 
+    std::cerr << \"Error: \" << msg << \"\\n\" << usage()
+              << \"\\nUse --help for more information\"
+              << std::endl;
+    exit(1);
+  }
 EOS
 
   # Help
