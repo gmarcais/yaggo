@@ -38,6 +38,12 @@ option("lib") {
   string; multiple; suffix
   description "Boggus lib"
 }
+option("str") {
+  description "C string"
+  c_string }
+option("vstr") {
+  description "vector of string"
+  c_string; multiple }
 option("numbers") {
   int64; multiple
   description "Many ints"
