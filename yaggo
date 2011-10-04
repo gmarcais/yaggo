@@ -414,7 +414,7 @@ class Option
 
   def help
     s  = @required ? "*" : " "
-    s += @description || "No description"
+    s += @description || ""
     s += " (#{@default})" unless @default.nil?
     s
   end
@@ -660,10 +660,15 @@ EOS
 EOS
 
   # Help
-  $description ||= "No description"
-  desc = $description.split(/\n/).join("\\n\" \\\n  \"")
+  desc = ""
+  unless $purpose.nil?
+    desc += $purpose + "\\n\\n"
+  end
+  unless $description.nil?
+    desc += $description.split(/\n/).join("\\n\" \\\n  \"") + "\\n\\n"
+  end
   h.puts(<<EOS)
-#define #{class_name}_HELP "#{desc}\\n\\n" \\
+#define #{class_name}_HELP "#{desc}" \\
   "Options (default value in (), *required):\\n" \\
 EOS
   $options.each { |o|
