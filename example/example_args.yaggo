@@ -1,0 +1,20 @@
+purpose "Example of yaggo usage"
+package "example"
+description "This is just an example.
+And a multi-line description."
+
+option("int", "i") {
+  description "Integer switch"
+  uint32; default "42" }
+option("string", "s") {
+  description "Many strings"
+  string; multiple }
+option("flag") {
+  description "A flag switch"
+  flag; off }
+arg("first") {
+  description "First arg"
+  c_string }
+arg("rest") {
+  description "Rest of'em"
+  double; multiple }
