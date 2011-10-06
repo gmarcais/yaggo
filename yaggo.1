@@ -1,0 +1,266 @@
+.TH yaggo 1  "2011-10-06" "version 1.0" "USER COMMANDS"
+
+.SH NAME
+yaggo \- command line switch parser generator
+
+.SH SYNOPSIS
+.B yaggo
+[-l|--lib] [-p|--prefix PATH] [--local] [--man] [-h|--help]
+
+.SH DESCRIPTION
+Yaggo stands for Yet Another GenGetOpt. It is inspired by gengetopt
+software from the FSF.
+
+Yaggo generates a C++ class to parse command line switches (usually
+argc and argv passed to main) using getopt_long. The switches and
+arguments to the program are specified in a description file. To each
+description file, yaggo generates one C++ header file containing the
+parsing code. With the \-\-lib switch, yaggo generates the
+files 'yaggo.cpp' and 'yaggo.hpp' also necessary for compilation.
+.PP
+See the EXAMPLES section for a complete and simple example.
+
+.SH OPTIONS
+.TP
+\-l|\-\-lib
+Generate the yaggo.cpp and yaggo.hpp files.
+.TP
+\-p|\-\-path
+Path to find yaggo.hpp to prepend to the #include statements.
+.TP
+\-\-local Generate locate include statements (#include "...") instead
+of system statements (#include <...>).
+.TP
+\-\-man
+Display this man page
+.TP
+\-h|--help
+display a short help text
+
+.SH EXAMPLES
+Here is a fully working example. Consider the description
+files 'example_args.yaggo' which defines two switches (-i and -s)
+and arguments (first and the optional rest).
+
+.nf
+purpose "Example of yaggo usage"
+package "example"
+description "This is just an example.
+And a multi-line description."
+
+option("int", "i") {
+  description "Integer switch"
+  uint32; default "42" }
+option("string", "s") {
+  description "Many strings"
+  string; multiple }
+option("flag") {
+  description "A flag switch"
+  flag; off }
+arg("first") {
+  description "First arg"
+  c_string }
+arg("rest") {
+  description "Rest of'em"
+  double; multiple }
+.fi
+
+The associated simple C++ program 'examples.cpp' which display information about the switches and arguments passed:
+
+.nf
+#include <iostream>
+#include "example_args.hpp"
+
+int main(int argc, char *argv[]) {
+  example_args args(argc, argv);
+
+  std::cout << "Integer switch: " << args.int_arg << "\\n";
+  if(args.string_given)
+    std::cout << "Number of string(s): " << args.string_arg.size() << "\\n";
+  else
+    std::cout << "No string switch\\n";
+  std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\n";
+  std::cout << "First arg: " << args.first_arg << "\\n";
+  std::cout << "Rest:";
+  for(example_args::rest_arg_it it = args.rest_arg.begin(); it != args.rest_arg.end(); ++it)
+    std::cout << " " << *it;
+  std::cout << std::endl;
+
+  return 0;
+}
+.fi
+
+This can be compiled with the following commands:
+
+.nf
+% yaggo --lib --local example_args.yaggo
+% g++ -o example example.cpp yaggo.cpp
+.fi
+
+.SH DESCRIPTION FORMAT
+
+A description file is a sequence of statements. A statement is a
+keyword followed by some arguments. Strings must be surrounded by
+quotes ("" or '') and can span multiple lines. The order of the
+statements is irrelevant. Statements are separated by new lines or
+semi-colons ';'.
+
+.IP *
+Technically speaking, yaggo is implemented as a DSL (Domain Specific
+Language) using ruby. The description file is a valid ruby script and
+the keywords are ruby functions.
+.PP
+
+The following statements are global, not attached to a particular option or argument.
+
+.TP
+purpose
+A one line description of the program.
+.TP
+package
+The name of the package for the usage string. Defaults to the name of the class.
+.TP
+description
+A longer description of the program. Displayed by the help.
+.TP
+version
+The version string of the software.
+.TP
+license
+The license and copyright string of the software.
+.TP
+name
+The name of the class generated. Defaults to the name of the
+description file minus the .yaggo extension.
+.TP
+output
+The name of the output file. Defaults to the name of the
+description file with the .yaggo extension changed to .hpp.
+.PP
+
+The 'option' statement takes one or two arguments, which must be in
+parentheses, and a block of statements surrounded by curly braces
+({...}). The arguments are the long and short version of the
+option. Either one of the long or short version can be omitted. The
+block of statements describe the option in more details, as described
+below.
+
+A switch is named after the long version, or the short version if no
+long version. An 'option' statement for an option named 'switch'
+defines one or two public members in the class. For a flag, it
+creates 'switch_flag' as a boolean. Otherwise, it
+creates 'switch_arg', with a type as specified, and 'switch_given', a
+boolean indicating whether or not the switch was given on the command
+line.
+
+In addition to the switch created by 'option', the following switches are defined:
+
+.TP
+\-h, \-\-help
+Display the help message. \-h is not defined if it conflicts with an
+option statement.
+.TP
+\-\-full\-help
+Display hidden options as well.
+.TP
+\-\-version
+Display version string.
+.PP
+
+The following statement are recognized in an option block:
+.TP
+description "str"
+A short description for this switch.
+.TP
+int32, int64, uint32, uint64, double
+This switch is parsed as a number with the corresponding type int32_t,
+int64_t, uint32_t, uint64_t and double.
+.TP
+suffix
+Valid for numerical type switches as above. It can be appended
+with a SI suffix (e.g. 1M mean 1000000). The suffixes k, M, G, T, P,
+and E are supported for all the numerical types. The suffixes m, u, n,
+p, f, and a are supported for the double type.
+.TP
+c_string, string
+This switch is taken as a C string (const char *) or a C++ string
+(inherits from std::string). The C++ string type has the extra
+methods '<type> as_<type>(bool suffix)', where <type> is any numerical
+type as above, to convert the string into that type. If the 'suffix'
+boolean is true, parsing is done using SI suffixes.
+.TP
+required
+This switch is required. An error is generated if not given on the
+command line.
+.TP
+hidden
+This switch is not shown with --help. Use --full-help to see the
+hidden switches, if any.
+.TP
+multiple
+This switch can be passed multiple times. The values are stored in a
+std::vector. A type for the iterator is also defined in the class with
+the name 'switch_arg_it', where 'switch' is the name of the option.
+.TP
+flag
+This switch is a flag and does not take an argument.
+.TP
+on, off
+The default state for a flag switch.
+.TP
+default "val"
+The default value for this switch. It must be passed as a string
+(i.e. surrounded by quotes), even for numerical types.
+.TP
+typestr "str"
+In the help message, by default, the type of the option is
+displayed. It can be replaced by the string given to 'typestr'.
+.PP
+
+A 'arg' statement defines an arg passed to the command line. The
+statement takes a single argument, the name of the arg, and a block of
+statements. The block of statements are similar to the option block,
+except that hidden, flag, on and off are not allowed. At most one arg
+can have the 'multiple' statement, and it must be the last one. In
+addition, the arg recognizes one extra statement.
+
+.TP
+at_least n
+At least n args must be given. Defaults to 0.
+.PP
+
+.SH LICENSE
+
+There are 3 parts to the software: the yaggo ruby script itself, the
+yaggo.cpp and yaggo.hpp generated by --lib, the header files generated
+by yaggo from the description files. The licenses are as follow:
+
+.TP
+yaggo the ruby script
+This software is licensed under the GNU General
+Public License version 3 or any later version. Copyright (c) 2011
+Guillaume Marcais.
+
+.TP
+yaggo.cpp and yaggo.hpp
+These files are licensed under the MIT license. Copyright (c) 2011 Guillaume Marcais.
+
+.TP
+The generated header files.
+These files have the license and copyright that you, the user of
+yaggo, assign with the 'license' keyword.
+.PP
+In short: only yaggo the software is GPL. The yaggo.cpp and yaggo.hpp
+have a very liberal license (MIT) that allows you to use them in any
+project you wish. The generated header files are considered derivative
+of your work (e.g. the description), and you define the copyright and
+license of those as you see fit.
+
+.SH BUGS
+.IP *
+The error message returned by ruby can be a little confusing.
+
+.SH AUTHOR
+Guillaume Marcais (gmarcais@umd.edu)
+.SH SEE ALSO
+getopt_long(3), gengetopt(1)
