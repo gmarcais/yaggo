@@ -308,11 +308,13 @@ $target = NoTarget.new
 
 def output str; $output = str; end
 def name str; $class = str; end
-def name str; $class = str; end
 def purpose str; $purpose = str; end
 def package str; $package = str; end
 def description str; $target.description = str; end
 def version str; $version = str; end
+$global_variables = [:output, :name, :purpose, :package,
+                     :description, :version]
+output = name = purpose = package = description = version = nil
 
 def int32; $target.type = :int32; end
 def int64; $target.type = :int64; end
@@ -331,6 +333,11 @@ def default str; $target.default = str; end
 def typestr str; $target.typestr = str; end
 def multiple; $target.multiple = true; end
 def at_least n; $target.at_least = n; end
+# Define the following local variables and check their value after
+# yielding the block to catch syntax such as default="value".
+$option_variables = [:default, :typestr, :at_least]
+default = typestr = at_least = nil
+$main_binding = binding
 
 def default_val(val, type)
   res = ""
@@ -417,7 +424,7 @@ class Option
 
   def help
     s  = @required ? "*" : " "
-    s += @description || ""
+    s += @description.gsub(/"/, '\"') || ""
     s += " (#{@default})" unless @default.nil?
     s
   end
@@ -510,7 +517,9 @@ def option(name1, name2 = nil)
   $options << o
   $target = o
   begin
+    eval("#{$option_variables.join(" = ")} = nil", $main_binding)
     yield
+    $option_variables.each { |n| eval("#{n} #{n} unless #{n}.nil?", $main_binding) }
   ensure
     $target = NoTarget.new
   end
@@ -521,7 +530,9 @@ def arg(name)
   $args << a
   $target = a
   begin
+    eval("#{$global_variables.join(" = ")} = nil", $main_binding)
     yield
+    $global_variables.each { |n| eval("#{n} #{n} unless #{n}.nil?", $main_binding) }
   ensure
     $target = NoTarget.new
   end
@@ -747,7 +758,7 @@ end
 
 ARGV.each do |input_file|
   pid = fork do
-    load(input_file)
+    eval(File.read(input_file))
     fsplit = File.basename(input_file).split(/\./)
     $class ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
     $output ||= input_file.gsub(/\.yaggo$/, "") + ".hpp"

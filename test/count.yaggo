@@ -1,4 +1,4 @@
-purpose "Count k-mers or qmers in fasta or fastq files"
+purpose = "Count k-mers or qmers in fasta or fastq files"
 package "jellyfish count"
 description "Count k-mers in fasta or fastq files.
 
@@ -10,6 +10,7 @@ name "count_cmdline"
 
 option("mer-len", "m") {
   uint32; required; description "Length of mer"
+  default="314159"
 }
 option("size", "s") {
   uint64; required; suffix; description "Hash size"
