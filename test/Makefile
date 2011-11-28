@@ -10,3 +10,5 @@ yaggo.cpp yaggo.hpp: ../yaggo
 count_cmdline.hpp: count.yaggo ../yaggo
 	../yaggo $<
 count.o: count.cpp count_cmdline.hpp yaggo.hpp
+clean:
+	rm -f *.o count

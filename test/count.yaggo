@@ -8,18 +8,18 @@ version "0.0.1"
 license "My great license
 Enjoy!"
 
-# output "count_cmdline.hpp"
-# name "count_cmdline"
+output "count_cmdline.hpp"
+name "count_cmdline"
 
 option("mer-len", "m") {
-  uint32; required; description "Length of mer"
-  default="314159"
+  required; description "Length of mer"
+  uint32; default "314159"
 }
 option("size", "s") {
   uint64; required; suffix; description "Hash size"
 }
 option("threads", "t") {
-  uint32; default "1"; description "Number of threads"
+  uint32; default 1; description "Number of threads"
 }
 option("output", "o") {
   string; default "mer_counts"; description "Output prefix"
@@ -29,7 +29,7 @@ option("counter-len", "c") {
   description "Length of counting field"
 }
 option("high", "h") {
-  flag; on; description "Am I high?"
+  on; description "Am I high?"
 }
 # option("out-counter-len") {
 #   hidden; uint32; default "4"; typestr "Length in bytes"
@@ -39,7 +39,7 @@ option("both-strands", "C") {
   flag; off; description "Count both strand, canonical representation"
 }
 option("lib") {
-  string; multiple; suffix
+  string; multiple
   description "Boggus lib"
 }
 option("str") {
@@ -53,19 +53,17 @@ option("numbers") {
   description "Many ints"
 }
 option("double") {
-  double; multiple; suffix
+  double; suffix; multiple
   description "Many doubles"
 }
 option("verra") {
-  typestr "who knows but it is way too long anyhow."
+  string; typestr "who knows but it is way too long anyhow."
   description "On verra"
 }
 arg("first") {
   string; typestr "path"
-  at_least 2
   description "First"
 }
-
 arg("second") {
   uint32; multiple
   description "Plenty of ints"

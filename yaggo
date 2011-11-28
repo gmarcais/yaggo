@@ -25,6 +25,7 @@ options = {
   :prefix => nil,
   :local => false,
   :manual => false,
+  :debug => false,
 }
 parser = OptionParser.new do |o|
   o.banner = "Usage: #{$0} [options] [file.yaggo]"
@@ -42,6 +43,9 @@ parser = OptionParser.new do |o|
   }
   o.on("--man", "Manual page") {
     options[:manual] = true
+  }
+  o.on("--debug", "Debug yaggo") {
+    options[:debug] = true
   }
 
   o.on_tail("-h", "--help", "Show this message") {
@@ -666,7 +670,7 @@ class NoTarget
   def description str; $description = str; end
   def description= str; $description = str; end
   def method_missing(m, *args)
-    raise "#{m} outside of option description"
+    raise "'#{m}' used outside of option or arg description"
   end
 end
 $target = NoTarget.new
@@ -682,21 +686,27 @@ $global_variables = [:output, :name, :purpose, :package,
                      :description, :version, :license]
 output = name = purpose = package = description = version = license = nil
 
-def int32; $target.type = :int32; end
-def int64; $target.type = :int64; end
-def uint32; $target.type = :uint32; end
-def uint64; $target.type = :uint64; end
-def int; $target.type = :int; end
-def long; $target.type = :long; end
-def double; $target.type = :double; end
-def suffix; $target.suffix = true; end
-def string; $target.type = :string; end
+# def set_type t
+#   raise "More than 1 type specified: '#{$target.type}' and '#{t}'" unless $target.type.nil?
+#   $target.type = t
+# end
+
+def int32;    $target.type = :int32; end
+def int64;    $target.type = :int64; end
+def uint32;   $target.type = :uint32; end
+def uint64;   $target.type = :uint64; end
+def int;      $target.type = :int; end
+def long;     $target.type = :long; end
+def double;   $target.type = :double; end
+def string;   $target.type = :string; end
 def c_string; $target.type = :c_string; end
+def flag;     $target.type = :flag; end
+
+def suffix; $target.suffix = true; end
 def required; $target.required = true; end
 def hidden; $target.hidden = true; end
-def flag; $target.type = :flag; end
-def on; $target.default = "true"; end
-def off; $target.default = "false"; end
+def on; $target.on; end
+def off; $target.off; end
 def default str; $target.default = str; end
 def typestr str; $target.typestr = str; end
 def multiple; $target.multiple = true; end
@@ -710,41 +720,130 @@ $main_binding = binding
 def default_val(val, type)
   res = ""
   res += '"' if @type == :string || @type == :c_string
-  res += val || $type_default[@type]
+  res += val.to_s || $type_default[@type]
   res += '"' if @type == :string || @type == :c_string
   res
 end
 
-class Option
-  attr_accessor :description, :type, :required, :default, :typestr
-  attr_accessor :hidden, :multiple, :suffix
-  attr_reader :long, :short, :var
+class BaseOptArg
+  def at_least=(n)
+    multiple = true
+    nb = case n
+         when Integer
+           n
+         when String
+           n =~ /^\d+$/ ? n.to_i : nil
+         else
+           nil
+         end
+    raise "Invalid minimum number for at_least (#{n})" if nb.nil?
+    self.multiple = true
+    @at_least = nb
+  end
+
+  def type=(t)
+    raise "More than 1 type specified: '#{type}' and '#{t}'" unless @type.nil? || @type == t
+    @type = t
+  end
+
+  def suffix=(t)
+    case type
+    when nil
+      raise "A numerical type must be specify before suffix"
+    when :flag, :string, :c_string
+      raise "Suffix is meaningless with the type #{type}"
+    end
+  end
+end
+
+class Option < BaseOptArg
+  attr_accessor :description, :required, :typestr
+  attr_accessor :hidden, :multiple
+  attr_reader :long, :short, :var, :type, :at_least, :default, :suffix
 
   def initialize(long, short)
     @long, @short = long, short
     @var = (@long || @short).gsub(/[^a-zA-Z0-9_]/, "_")
-    @type = :string
+    @type = nil
+    @default = nil
     @suffix = false
+    @at_least = nil
+  end
+
+  def on
+    self.type = :flag
+    self.default = "true"
+  end
+
+  def off
+    self.type = :flag
+    self.default = "false"
+  end
+
+  def tf_to_on_off v
+    case v
+    when "true"
+      "on"
+    when "false"
+      "off"
+    else
+      v
+    end
+  end
+
+  def default=(v)
+    type.nil? and raise "A type must be specified before defining a default value"
+    unless default.nil?
+      if type == :flag
+        v1, v2 = tf_to_on_off(default), tf_to_on_off(v)
+      else
+        v1, v2 = default, v
+      end
+      raise "More than 1 default value specified: '#{v1}' and '#{v2}'"
+    end
+    pref = "Option #{long || ""}|#{short || ""}:"
+    case @type
+    when nil
+      raise "#{pref} No type specified"
+    when :uint32, :uint64
+      (Integer === v && v >= 0) || (String === v && v =~ /^\d+$/) or
+        raise "#{pref} Invalid unsigned integer '#{v}'"
+    when :int32, :int64, :int, :long
+      (Integer === v) || (String === v && /^[+-]?\d+$/) or
+        raise "#{pref} Invalid integer #{v}"
+    when :double
+      (Float === v) || (String === v && v =~ /^[+-]?[\d.]+([eE][+-]?\d+)?$/) or
+        raise "#{pref} Invalid double #{v}"
+    end
+    @default = v
   end
 
   def check
     pref = "Option #{long || ""}|#{short || ""}:"
-    case @type
-      when :uint32, :uint64
-      @default.nil? || @default =~ /\d+/ or
-        raise "#{pref} Invalid unsigned integer #{@default} for #{@long || @short}"
-      when :int32, :int64, :int, :long
-      @default.nil? || @default =~ /[+-]?\d+/ or
-        raise "#{pref} Invalid integer #{@default} for #{@long || @short}"
-      when :double
-      @default.nil? || @default =~ /[+-]?[\d.]+([eE][+-]?\d+)?/ or
-        raise "#{pref} Invalid double #{@default} for #{@long || @short}"
-      when :flag
-      raise "#{pref} A flag cannot be declared multiple" if @multiple
-      raise "#{pref} Suffix is meaningless for a flag" if @suffix
-    end
-  end
+    raise "#{pref} No type specified" if type.nil?
 
+    if multiple
+      raise "#{pref} Multiple is meaningless with a flag" if type == :flag
+      raise "#{pref} An option marked multiple cannot have a default value" unless default.nil?
+    end
+    # case @type
+    # when nil
+    #   raise "#{pref} No type specified"
+    # when :uint32, :uint64
+    #   @default.nil? || @default =~ /^\d+$/ or
+    #     raise "#{pref} Invalid unsigned integer #{@default}"
+    # when :int32, :int64, :int, :long
+    #   @default.nil? || @default =~ /^[+-]?\d+$/ or
+    #     raise "#{pref} Invalid integer #{@default}"
+    # when :double
+    #   @default.nil? || @default =~ /^[+-]?[\d.]+([eE][+-]?\d+)?$/ or
+    #     raise "#{pref} Invalid double #{@default}"
+    # when :flag
+    #   raise "#{pref} A flag cannot be declared multiple" if @multiple
+    #   raise "#{pref} Suffix is meaningless for a flag" if @suffix
+    # end
+  end
+  
   def var_decl
     if @type == :flag
       ["#{"bool".ljust($typejust)} #{@var}_flag;"]
@@ -822,18 +921,40 @@ class Option
   end
 end
 
-class Arg
-  attr_accessor :description, :type, :default, :typestr, :multiple, :at_least
-  attr_accessor :suffix
-  attr_reader :name
+class Arg < BaseOptArg
+  attr_accessor :description, :type, :typestr, :multiple
+  attr_reader :name, :at_least, :suffix
   def initialize(str)
     @name = str
-    @type = :string
+    @type = nil
     @at_least = 0
     @suffix = false
   end
 
-  def check; true; end
+  def type=(t)
+    super
+    raise "An arg cannot be of type '#{t}'" if t == :flag
+  end
+
+  def on; raise "An arg cannot be a flag with default value on"; end
+  def off; raise "An arg cannot be a flag with default value off"; end
+
+  def default=(*args)
+    raise "An arg cannot have a default value (#{args[0]})"
+  end
+
+  def hidden=(*args)
+    raise "An arg cannot be marked hidden"
+  end
+
+  def required=(*args)
+    raise "An arg cannot be marked required"
+  end
+
+  def check
+    pref = "Arg #{name}:"
+    raise "#{pref} No type specified" if type.nil?
+  end
 
   def var_decl
     if @multiple
@@ -869,7 +990,27 @@ class Arg
   end
 end
 
-def option(name1, name2 = nil)
+def find_error_header bt
+  bt.each { |l| l =~ /^\(eval\):\d+:/ and return $& }
+  return ""
+end
+
+def run_block(name, b)
+  eval("#{$option_variables.join(" = ")} = nil", $main_binding)
+  b.call
+  $option_variables.each { |n| eval("#{n} #{n} unless #{n}.nil?", $main_binding) }
+rescue NoMethodError => e
+  header = find_error_header(e.backtrace)
+  raise "#{header} In #{name}: invalid keyword '#{e.name}' in statement '#{e.name} #{e.args.map { |s| "\"#{s}\"" }.join(" ")}'"
+rescue NameError => e
+  header = find_error_header(e.backtrace)
+  raise "#{header} In #{name}: invalid keyword '#{e.name}'"
+rescue RuntimeError => e
+  header = find_error_header(e.backtrace)
+  raise "#{header} In #{name}: #{e.message}"
+end
+
+def option(name1, name2 = nil, &b)
   long = short = nil
   if name1 =~ /^--/ || name1.length >= 2
     long, short = name1, name2
@@ -882,35 +1023,47 @@ def option(name1, name2 = nil)
   long.gsub!(/^--/, "") unless long.nil?
   short.gsub!(/^-/, "") unless short.nil?
   o = Option.new(long, short)
+  $options.each { |o| 
+    if (!long.nil? && o.long == long) || (!short.nil? && o.short == short)
+      raise "#{b.source_location.join(":")}: Option #{long}|#{short} conflicts with existing option #{o.long}|#{o.short}"
+    end
+  }
   $options << o
   $target = o
+  name  = "Option #{long || ""}|#{short || ""}"
+  run_block(name, b)
+  $target = NoTarget.new
   begin
-    eval("#{$option_variables.join(" = ")} = nil", $main_binding)
-    yield
-    $option_variables.each { |n| eval("#{n} #{n} unless #{n}.nil?", $main_binding) }
-  ensure
-    $target = NoTarget.new
+    o.check
+  rescue => e
+    raise "#{b.source_location.join(":")}: #{e.message}"
   end
 end
 
-def arg(name)
+def arg(name, &b)
   a = Arg.new(name)
+  raise "#{b.source_location.join(":")}: Arg '#{name}' already exists" if $args.any? { |a| a.name == name }
   $args << a
   $target = a
+  name = "Arg #{name}"
+  run_block(name, b)
+  $target = NoTarget.new
   begin
-    eval("#{$global_variables.join(" = ")} = nil", $main_binding)
-    yield
-    $global_variables.each { |n| eval("#{n} #{n} unless #{n}.nil?", $main_binding) }
-  ensure
-    $target = NoTarget.new
+    a.check
+  rescue => e
+    raise "#{b.source_location.join(":")}: #{e.message}"
   end
 end
 
 def output_cpp_parser(h, class_name)
   $options.each { |o| o.check }
   $args.each { |a| a.check }
-  if $args.size > 1 && $args[0..-2].any? { |a| a.multiple }
-    raise "Only last arg can be marked 'multiple'"
+  if $args.size > 1
+    mul_args = $args[0..-2].select { |a| a.multiple }
+    if mul_args.size > 0
+      gram = mul_args.size > 1 ? "s are" : " is"
+      raise "The following#{gram} not the last arg but marked multiple: #{mul_args.map { |a| a.name }.join(", ")}"
+    end
   end
 
   # Headers
@@ -1024,6 +1177,14 @@ EOS
     h.puts(<<EOS)
     if(!#{o.var}_given)
       error("[#{o.switches}] required switch");
+EOS
+  }
+  # Check at_least
+  $options.each { |o|
+    next unless o.multiple && !o.at_least.nil?
+    h.puts(<<EOS)
+    if(#{o.var}_arg.size() < #{o.at_least})
+      error("[#{o.switches}] must be given at least #{o.at_least} times");
 EOS
   }
   
@@ -1142,17 +1303,34 @@ end
 
 ARGV.each do |input_file|
   pid = fork do
-    eval(File.read(input_file))
+    begin
+      eval(File.read(input_file))
+      parsed = true
+    rescue RuntimeError, SyntaxError => e
+      raise e if options[:debug]
+      STDERR.puts(e.message.gsub(/^\(eval\)/, input_file))
+      exit 1
+    rescue NoMethodError => e
+      raise e if options[:debug]
+      STDERR.puts("Invalid keyword '#{e.name}'")
+      exit 1
+    end
+
     fsplit = File.basename(input_file).split(/\./)
     $class ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
     $output ||= input_file.gsub(/\.yaggo$/, "") + ".hpp"
-
+    
     begin
       out_fd = open($output, "w")
       output_cpp_parser(out_fd, $class)
+    rescue RuntimeError => e
+      raise e if options[:debug]
+      STDERR.puts("#{input_file}: #{e.message}")
+      exit 1
     ensure
       out_fd.close if out_fd
     end
   end
   Process.waitpid pid
+  exit 1 if !$?.exited? || ($?.exited? && $?.exitstatus != 0)
 end
