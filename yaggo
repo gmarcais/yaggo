@@ -941,6 +941,7 @@ EOS
   h.print("  enum {\n    USAGE_OPT = 1000")
   h.print(",\n    FULL_HELP_OPT") if need_full
   h.print(",\n    HELP_OPT") if help_no_h
+  h.print(",\n    VERSION_OPT") if version_no_V
   if only_long.empty?
     h.puts("\n  };")
   else
@@ -956,10 +957,14 @@ EOS
   h.puts("      {\"help\", 0, 0, #{help_no_h ? "HELP_OPT" : "'h'"}},")
   h.puts("      {\"full-help\", 0, 0, FULL_HELP_OPT},") if need_full
   h.puts("      {\"usage\", 0, 0, USAGE_OPT},",
-         "      {\"version\", 0, 0, 'V'},",
+         "      {\"version\", 0, 0, #{version_no_V ? "VERSION_OPT" : "'V'"}},",
          "      {0, 0, 0, 0}", "    };")
-  short_str = $options.map { |o| o.short_str }.compact.join("")
-  h.puts("    static const char *short_options = \"hV#{short_str}\";", "")
+  short_str = ""
+  short_str += "h" unless help_no_h
+  short_str += "V" unless version_no_V
+  short_str += $options.map { |o| o.short_str }.compact.join("")
+  
+  h.puts("    static const char *short_options = \"#{short_str}\";", "")
 
   need_err   = $options.any? { |o| o.type != :flag && o.type != :string && o.type != :c_string}
   need_err ||= $args.any? { |a| a.type != :string && a.type != :c_string }
