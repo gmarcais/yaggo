@@ -355,6 +355,8 @@ $type_to_C_type = {
   :uint64 => "uint64_t",
   :int32 => "int32_t",
   :int64 => "int64_t",
+  :int => "int",
+  :long => "long",
   :double => "double",
   :string => "yaggo::string",
   :c_string => "const char *",
@@ -364,7 +366,9 @@ $type_default = {
   :uint64 => "0",
   :int32 => "0",
   :int64 => "0",
-  :double => "0.0d",
+  :int => "0",
+  :long => "0",
+  :double => "0.0",
   :string => "",
   :c_string => "",
 }
@@ -386,7 +390,7 @@ def str_conv(arg, type, suffix)
     arg
   when :uint32, :uint64
     "yaggo::conv_uint<#{$type_to_C_type[type]}>((const char *)#{arg}, err, #{si_suffix})"
-  when :int32, :int64
+  when :int32, :int64, :long, :int
     "yaggo::conv_int<#{$type_to_C_type[type]}>((const char *)#{arg}, err, #{si_suffix})"
   when :double
     "yaggo::conv_double((const char *)#{arg}, err, #{si_suffix})"
@@ -455,7 +459,7 @@ namespace yaggo {
     string(const char *s) : std::string(s) {}
 EOS
       
-      [:uint32, :uint64, :int32, :int64, :double].each do |type|
+      [:uint32, :uint64, :int32, :int64, :int, :long, :double].each do |type|
         fd.puts(<<EOS)
     #{$type_to_C_type[type]} as_#{type}_suffix() const { return as_#{type}(true); }
     #{$type_to_C_type[type]} as_#{type}(bool si_suffix = false) const;
@@ -587,7 +591,7 @@ EOS
 namespace yaggo {
 EOS
 
-    [:uint32, :uint64, :int32, :int64, :double].each do |type|
+    [:uint32, :uint64, :int32, :int64, :int, :long, :double].each do |type|
       fd.puts(<<EOS)
   #{$type_to_C_type[type]} string::as_#{type}(bool si_suffix) const {
     std::string err;
@@ -682,6 +686,8 @@ def int32; $target.type = :int32; end
 def int64; $target.type = :int64; end
 def uint32; $target.type = :uint32; end
 def uint64; $target.type = :uint64; end
+def int; $target.type = :int; end
+def long; $target.type = :long; end
 def double; $target.type = :double; end
 def suffix; $target.suffix = true; end
 def string; $target.type = :string; end
@@ -727,11 +733,11 @@ class Option
       when :uint32, :uint64
       @default.nil? || @default =~ /\d+/ or
         raise "#{pref} Invalid unsigned integer #{@default} for #{@long || @short}"
-      when :int32, :int64
+      when :int32, :int64, :int, :long
       @default.nil? || @default =~ /[+-]?\d+/ or
         raise "#{pref} Invalid integer #{@default} for #{@long || @short}"
       when :double
-      @default.nil? || @default =~ /[+-][\d.]+([eE][+-]?\d+)?/ or
+      @default.nil? || @default =~ /[+-]?[\d.]+([eE][+-]?\d+)?/ or
         raise "#{pref} Invalid double #{@default} for #{@long || @short}"
       when :flag
       raise "#{pref} A flag cannot be declared multiple" if @multiple
@@ -808,7 +814,7 @@ class Option
       a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type, false)});" : "#{@var}_arg.assign(optarg);")
     when :c_string
       a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type, false)});" : "#{@var}_arg = optarg;")
-    when :uint32, :uint64, :int32, :int64, :double
+    when :uint32, :uint64, :int32, :int64, :int, :long, :double
       a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type, @suffix)});" : "#{@var}_arg = #{str_conv("optarg", @type, @suffix)};")
       a << "CHECK_ERR(#{@type}_t, optarg, \"#{switches}\")" 
     end
