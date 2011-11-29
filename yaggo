@@ -239,9 +239,9 @@ The following statement are recognized in an option block:
 description "str"
 A short description for this switch.
 .TP
-int32, int64, uint32, uint64, double
+int32, int64, uint32, uint64, double, int, long
 This switch is parsed as a number with the corresponding type int32_t,
-int64_t, uint32_t, uint64_t and double.
+int64_t, uint32_t, uint64_t, double, int and long.
 .TP
 suffix
 Valid for numerical type switches as above. It can be appended
@@ -273,7 +273,7 @@ flag
 This switch is a flag and does not take an argument.
 .TP
 on, off
-The default state for a flag switch.
+The default state for a flag switch. Implies flag.
 .TP
 default "val"
 The default value for this switch. It must be passed as a string
@@ -282,19 +282,16 @@ The default value for this switch. It must be passed as a string
 typestr "str"
 In the help message, by default, the type of the option is
 displayed. It can be replaced by the string given to 'typestr'.
+.TP
+at_least n
+The given switch must be given at least n times. Implies multiple.
 .PP
 
 A 'arg' statement defines an arg passed to the command line. The
 statement takes a single argument, the name of the arg, and a block of
 statements. The block of statements are similar to the option block,
 except that hidden, flag, on and off are not allowed. At most one arg
-can have the 'multiple' statement, and it must be the last one. In
-addition, the arg recognizes one extra statement.
-
-.TP
-at_least n
-At least n args must be given. Defaults to 0.
-.PP
+can have the 'multiple' statement, and it must be the last one.
 
 .SH LICENSE
 
