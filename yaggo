@@ -21,6 +21,7 @@
 require 'optparse'
 
 options = {
+  :output => nil,
   :lib => false,
   :prefix => nil,
   :local => false,
@@ -34,6 +35,9 @@ parser = OptionParser.new do |o|
 
   o.on("-l", "--lib", "Output yaggo.{cpp,hpp}") {
     options[:lib] = true
+  }
+  o.on("-o", "--output FILE", "Output file") { |v|
+    options[:output] = v
   }
   o.on("-p", "--prefix PATH", "Prefix to include yaggo.hpp") { |v|
     options[:prefix] = v
@@ -58,7 +62,10 @@ if !options[:lib] && !options[:manual] && ARGV.empty?
   STDERR.puts "Error: some yaggo files and/or --lib switch is required", parser
   exit 1
 end
-
+if !options[:output].nil? && ARGV.size != 1
+  STDERR.puts "Error: output switch meaningfull only with 1 input file", parser
+  exit 1
+end
 
 ##############################
 # Display man page
@@ -1339,8 +1346,9 @@ ARGV.each do |input_file|
       exit 1
     end
 
-    fsplit = File.basename(input_file).split(/\./)
-    $class ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
+    fsplit    = File.basename(input_file).split(/\./)
+    $class  ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
+    $output   = options[:output] if options[:output]
     $output ||= input_file.gsub(/\.yaggo$/, "") + ".hpp"
     
     begin
