@@ -1048,9 +1048,9 @@ def option(name1, name2 = nil, &b)
   long.gsub!(/^--/, "") unless long.nil?
   short.gsub!(/^-/, "") unless short.nil?
   o = Option.new(long, short)
-  $options.each { |o| 
-    if (!long.nil? && o.long == long) || (!short.nil? && o.short == short)
-      raise "#{b.source_location.join(":")}: Option #{long}|#{short} conflicts with existing option #{o.long}|#{o.short}"
+  $options.each { |lo| 
+    if (!long.nil? && lo.long == long) || (!short.nil? && lo.short == short)
+      raise "#{b.source_location.join(":")}: Option #{long}|#{short} conflicts with existing option #{lo.long}|#{lo.short}"
     end
   }
   $options << o
@@ -1067,7 +1067,8 @@ end
 
 def arg(name, &b)
   a = Arg.new(name)
-  raise "#{b.source_location.join(":")}: Arg '#{name}' already exists" if $args.any? { |a| a.name == name }
+  $args.any? { |la| la.name == name } and
+    raise "#{b.source_location.join(":")}: Arg '#{name}' already exists"
   $args << a
   $target = a
   name = "Arg #{name}"
@@ -1100,8 +1101,8 @@ EOS
 
   if $license
     lines = $license.split(/\n/)
-    h.puts("/* #{lines[0]}", *(lines[1..-1].map { |l| " * " + l }),
-           " */", "")
+    h.puts("/* #{lines[0]}", *(lines[1..-1].map { |l| " * " + l }))
+    h.puts(" */", "")
   end
 
 h.puts(<<EOS)
