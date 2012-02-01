@@ -750,6 +750,7 @@ class BaseOptArg
     when :flag, :string, :c_string
       raise "Suffix is meaningless with the type #{type}"
     end
+    @suffix = t
   end
 end
 
@@ -923,6 +924,7 @@ class Arg < BaseOptArg
   attr_reader :name, :at_least, :suffix
   def initialize(str)
     @name = str
+    @var = @name.gsub(/[^a-zA-Z0-9_]/, "_")
     @type = nil
     @at_least = 0
     @suffix = false
@@ -956,17 +958,17 @@ class Arg < BaseOptArg
   def var_decl
     if @multiple
       c_type = "std::vector<#{$type_to_C_type[@type]}>"
-      [c_type.ljust($typejust) + " #{@name}_arg;",
-       "typedef #{c_type}::iterator #{@name}_arg_it;",
-       "typedef #{c_type}::const_iterator #{@name}_arg_const_it;"]
+      [c_type.ljust($typejust) + " #{@var}_arg;",
+       "typedef #{c_type}::iterator #{@var}_arg_it;",
+       "typedef #{c_type}::const_iterator #{@var}_arg_const_it;"]
     else
-      ["#{$type_to_C_type[@type]}".ljust($typejust) + " #{@name}_arg;"]
+      ["#{$type_to_C_type[@type]}".ljust($typejust) + " #{@var}_arg;"]
     end
   end
 
   def dump
-    ["\"#{@name}_arg:\"",
-     @multiple ? "yaggo::vec_str(#{@name}_arg)" : "#{@name}_arg"]
+    ["\"#{@var}_arg:\"",
+     @multiple ? "yaggo::vec_str(#{@var}_arg)" : "#{@var}_arg"]
   end
 
   def parse_arg
@@ -974,13 +976,13 @@ class Arg < BaseOptArg
     off = ""
     if @multiple
       a << "for( ; optind < argc; ++optind) {"
-      a << "  #{@name}_arg.push_back(#{str_conv("argv[optind]", @type, @suffix)});"
+      a << "  #{@var}_arg.push_back(#{str_conv("argv[optind]", @type, @suffix)});"
       off = "  "
     else
-      a << "#{@name}_arg = #{str_conv("argv[optind]", @type, @suffix)};"
+      a << "#{@var}_arg = #{str_conv("argv[optind]", @type, @suffix)};"
     end
     unless @type == :string || @type == :c_string
-      a << (off + "CHECK_ERR(#{@type}_t, argv[optind], \"#{@name}\")")
+      a << (off + "CHECK_ERR(#{@type}_t, argv[optind], \"#{@var}\")")
     end
     a << (@multiple ? "}" : "++optind;")
     a
@@ -1002,7 +1004,7 @@ rescue NoMethodError => e
 rescue NameError => e
   header = find_error_header(e.backtrace)
   raise "#{header} In #{name}: invalid keyword '#{e.name}'"
-rescue RuntimeError => e
+rescue RuntimeError, ArgumentError => e
   header = find_error_header(e.backtrace)
   raise "#{header} In #{name}: #{e.message}"
 end
