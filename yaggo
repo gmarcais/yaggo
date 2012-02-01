@@ -373,6 +373,16 @@ $type_default = {
   :string => "",
   :c_string => "",
 }
+
+def dflt_typestr(type)
+  case type
+  when :c_string
+    "string"
+  else
+    type.to_s
+  end
+end
+
 def str_conv(arg, type, suffix)
   si_suffix = case suffix
               when true
@@ -882,7 +892,7 @@ class Option < BaseOptArg
     s += ", " unless @short.nil? || @long.nil?
     unless @long.nil?
       s += "--#{@long}"
-      s += "=#{@typestr || @type}" unless @type == :flag
+      s += "=#{@typestr || dflt_typestr(@type)}" unless @type == :flag
     end
     s
   end
