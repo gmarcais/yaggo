@@ -1116,10 +1116,15 @@ EOS
     h.puts(",", "    " + only_long.join(",\n    "), "  };")
   end
 
-  # Constructor and initialization
-  h.puts("", "  #{class_name}(int argc, char *argv[]) :")
+  # Constructors and initialization
+  h.puts("", "  #{class_name}() : ")
+  h.puts("    " + $options.map { |o| o.init }.join(",\n    "), "  { }")
+  h.puts("", "  #{class_name}(int argc, char* argv[]) :")
   h.puts("    " + $options.map { |o| o.init }.join(",\n    "))
-  h.puts("  {",
+  h.puts("  { parse(argc, argv); }", "");
+
+  # Main arsing function
+  h.puts("  void parse(int argc, char* argv[]) {",
          "    static struct option long_options[] = {")
   h.puts("      " + $options.map { |o| o.struct }.join(",\n      ") + ",")
   h.puts("      {\"help\", 0, 0, #{help_no_h ? "HELP_OPT" : "'h'"}},")
