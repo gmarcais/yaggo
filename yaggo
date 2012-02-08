@@ -164,6 +164,15 @@ This can be compiled with the following commands:
 % g++ -o example example.cpp yaggo.cpp
 .fi
 
+The yaggo command above will create by default the file
+'example_args.hpp' (changed '.yaggo' extension to '.hpp'). The output
+file name can be changed with the 'output' keyword explained below.
+
+The '--lib' switch asks yaggo to create the common files 'yaggo.hpp'
+and 'yaggo.cc'. This switch is needed only once. The next time yaggo
+is run, the --lib switch is not needed, as the common files are fixed
+and do not depend on the input file 'example_args.yaggo'.
+
 .SH DESCRIPTION FORMAT
 
 A description file is a sequence of statements. A statement is a
