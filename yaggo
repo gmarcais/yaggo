@@ -276,6 +276,10 @@ required
 This switch is required. An error is generated if not given on the
 command line.
 .TP
+conflict
+Specify a comma separated list of switches that conflicts with this
+one.
+.TP
 hidden
 This switch is not shown with --help. Use --full-help to see the
 hidden switches, if any.
@@ -687,6 +691,7 @@ end
 # Process an input files
 ##############################
 $options = []
+$opt_hash = {}
 $args = []
 
 class NoTarget
@@ -734,6 +739,7 @@ def default str; $target.default = str; end
 def typestr str; $target.typestr = str; end
 def multiple; $target.multiple = true; end
 def at_least n; $target.at_least = n; end
+def conflict *a; $target.conflict += a; end
 # Define the following local variables and check their value after
 # yielding the block to catch syntax such as default="value".
 $option_variables = [:default, :typestr, :at_least]
@@ -782,7 +788,7 @@ end
 
 class Option < BaseOptArg
   attr_accessor :description, :required, :typestr
-  attr_accessor :hidden, :multiple
+  attr_accessor :hidden, :multiple, :conflict
   attr_reader :long, :short, :var, :type, :at_least, :default, :suffix
 
   def initialize(long, short)
@@ -792,6 +798,7 @@ class Option < BaseOptArg
     @default = nil
     @suffix = false
     @at_least = nil
+    @conflict = []
   end
 
   def on
@@ -1081,6 +1088,19 @@ def arg(name, &b)
   end
 end
 
+def check_conflict_exclude
+  $options.each { |o|
+    $opt_hash[o.long] = o unless o.long.nil?
+    $opt_hash[o.short] = o unless o.short.nil?
+  }
+  $options.each { |o|
+    o.conflict.each { |co|
+      $opt_hash[co.gsub(/^-+/, "")] or 
+      raise "Unknown conflict option '#{co}' for switch #{o.long}|#{o.short}"
+    }
+  }
+end
+
 def output_cpp_parser(h, class_name)
   $options.each { |o| o.check }
   $args.each { |a| a.check }
@@ -1203,6 +1223,8 @@ EOS
          "    }") # close while(true)
 
   # Check required
+  $options.any? { |o| o.required} and
+    h.puts("", "    // Check that required switches are present")
   $options.each { |o|
     next unless o.required
     h.puts(<<EOS)
@@ -1210,7 +1232,23 @@ EOS
       error("[#{o.switches}] required switch");
 EOS
   }
+  # Check conflict
+  $options.any? { |o| !o.conflict.empty? } and
+    h.puts("", "    // Check mutually exlusive switches")
+  $options.each { |o|
+    o_check = o.var + (o.type == :flag ? "_flag" : "_given")
+    o.conflict.each { |cos|
+      co = $opt_hash[cos]
+      co_check = co.var + (co.type == :flag ? "_flag" : "_given")
+      h.puts(<<EOS)
+    if(#{o_check} && #{co_check})
+      error("Switches [#{o.switches}] and [#{co.switches}] are mutually exclusive");
+EOS
+    }
+  }
   # Check at_least
+  $options.any? { |o| o.at_least } and
+    h.puts("", "    // Check at_least requirements")
   $options.each { |o|
     next unless o.multiple && !o.at_least.nil?
     h.puts(<<EOS)
@@ -1220,6 +1258,7 @@ EOS
   }
   
   # Parse arguments
+  h.puts("", "    // Parse arguments")
   if $args.size == 0 || !$args[-1].multiple
     h.puts(<<EOS)
     if(argc - optind != #{$args.size})
@@ -1234,10 +1273,10 @@ EOS
   end
   $args.each { |a| h.puts("    " + a.parse_arg.join("\n    ")) }
 
-  h.puts("  }") # close constructor
+  h.puts("  }") # close parser
 
   # Usage
-  h.print("#define #{class_name}_USAGE \"Usage: #{$package || class_name} [options]")
+  h.print("\n#define #{class_name}_USAGE \"Usage: #{$package || class_name} [options]")
   $args.each { |a|
     h.print(" #{a.name}:#{a.typestr || a.type}#{a.multiple ? "+" : ""}") 
   }
@@ -1261,6 +1300,7 @@ EOS
     desc += $description.split(/\n/).join("\\n\" \\\n  \"") + "\\n\\n"
   end
   h.puts(<<EOS)
+
 #define #{class_name}_HELP "#{desc}" \\
   "Options (default value in (), *required):\\n" \\
 EOS
@@ -1337,6 +1377,7 @@ ARGV.each do |input_file|
     begin
       eval(File.read(input_file))
       parsed = true
+      check_conflict_exclude
     rescue RuntimeError, SyntaxError => e
       raise e if options[:debug]
       STDERR.puts(e.message.gsub(/^\(eval\)/, input_file))
