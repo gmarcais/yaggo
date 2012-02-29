@@ -1278,7 +1278,7 @@ EOS
   # Usage
   h.print("\n#define #{class_name}_USAGE \"Usage: #{$package || class_name} [options]")
   $args.each { |a|
-    h.print(" #{a.name}:#{a.typestr || a.type}#{a.multiple ? "+" : ""}") 
+    h.print(" #{a.name}:#{a.typestr || dflt_typestr(a.type)}#{a.multiple ? "+" : ""}") 
   }
   h.puts("\"")
   h.puts(<<EOS)
@@ -1378,7 +1378,7 @@ ARGV.each do |input_file|
       eval(File.read(input_file))
       parsed = true
       check_conflict_exclude
-    rescue RuntimeError, SyntaxError => e
+    rescue RuntimeError, SyntaxError, Errno::ENOENT, Errno::EACCES => e
       raise e if options[:debug]
       STDERR.puts(e.message.gsub(/^\(eval\)/, input_file))
       exit 1
