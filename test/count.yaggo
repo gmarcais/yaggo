@@ -23,6 +23,7 @@ option("threads", "t") {
 }
 option("output", "o") {
   string; default "mer_counts"; description "Output prefix"
+  conflict "c", "high"
 }
 option("counter-len", "c") {
   uint32; default "7"; typestr "Length in bits"
@@ -30,6 +31,11 @@ option("counter-len", "c") {
 }
 option("high", "h") {
   on; description "Am I high?"
+}
+option("severity") {
+  description "Severity description"
+  enum "low", "middle", "high"
+  default 2
 }
 # option("out-counter-len") {
 #   hidden; uint32; default "4"; typestr "Length in bytes"

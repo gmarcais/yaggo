@@ -28,7 +28,9 @@ options = {
   :manual => false,
   :debug => false,
 }
+$yaggo_version = "1.1"
 parser = OptionParser.new do |o|
+  o.version = $yaggo_version
   o.banner = "Usage: #{$0} [options] [file.yaggo]"
   o.separator ""
   o.separator "Specific options:"
@@ -71,8 +73,8 @@ end
 # Display man page
 ##############################
 if options[:manual]
-  manual = <<'EOS'
-.TH yaggo 1  "2011-10-06" "version 1.0" "USER COMMANDS"
+  manual = <<EOS
+.TH yaggo 1  "2012-03-09" "version #{$yaggo_version}" "USER COMMANDS"
 
 .SH NAME
 yaggo \- command line switch parser generator
@@ -131,6 +133,9 @@ option("string", "s") {
 option("flag") {
   description "A flag switch"
   flag; off }
+option("severity") {
+  description "An enum switch"
+  enum "low", "middle", "high" }
 arg("first") {
   description "First arg"
   c_string }
@@ -148,13 +153,16 @@ The associated simple C++ program 'examples.cpp' which display information about
 int main(int argc, char *argv[]) {
   example_args args(argc, argv);
 
-  std::cout << "Integer switch: " << args.int_arg << "\\n";
+  std::cout << "Integer switch: " << args.int_arg << "\\\\n";
   if(args.string_given)
-    std::cout << "Number of string(s): " << args.string_arg.size() << "\\n";
+    std::cout << "Number of string(s): " << args.string_arg.size() << "\\\\n";
   else
-    std::cout << "No string switch\\n";
-  std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\n";
-  std::cout << "First arg: " << args.first_arg << "\\n";
+    std::cout << "No string switch\\\\n";
+  std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\\\n";
+  std::cout << "First arg: " << args.first_arg << "\\\\n";
+  std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity_strs[args.severity_arg] << "\\\\n";
+  if(args.severity_arg == example_args::high)
+    std::cout << "Warning: severity is high\\\\n";
   std::cout << "Rest:";
   for(example_args::rest_arg_it it = args.rest_arg.begin(); it != args.rest_arg.end(); ++it)
     std::cout << " " << *it;
@@ -272,6 +280,16 @@ methods '<type> as_<type>(bool suffix)', where <type> is any numerical
 type as above, to convert the string into that type. If the 'suffix'
 boolean is true, parsing is done using SI suffixes.
 .TP
+enum
+
+This statement must be followed by a comma separated list of strings
+(as in 'enum "choice0", "choice1, "choice2"'). This switch takes value
+a string in the list and is converted to int and a C enum type named
+'switchname_enum' is defined with the same choices in the given order.
+
+
+
+.TP
 required
 This switch is required. An error is generated if not given on the
 command line.
@@ -381,6 +399,7 @@ $type_to_C_type = {
   :double => "double",
   :string => "yaggo::string",
   :c_string => "const char *",
+  :enum => "int",
 }
 $type_default = {
   :uint32 => "0",
@@ -392,39 +411,48 @@ $type_default = {
   :double => "0.0",
   :string => "",
   :c_string => "",
+  :enum => "0",
 }
 
-def dflt_typestr(type)
+def dflt_typestr(type, *argv)
   case type
   when :c_string
     "string"
+  when :enum
+    argv[0].join("|")
   else
     type.to_s
   end
 end
 
-def str_conv(arg, type, suffix)
-  si_suffix = case suffix
-              when true
-                "true"
-              when false
-                "false"
-              when String
-                suffix
-              else
-                raise "Invalid suffix specifier"
-              end
+def suffix_arg(suffix)
+  case suffix
+  when true
+    "true"
+  when false
+    "false"
+  when String
+    suffix
+  else
+    raise "Invalid suffix specifier"
+  end
+end
+
+def str_conv(arg, type, *argv)
   case type
   when :string
     "yaggo::string(#{arg})"
   when :c_string
     arg
   when :uint32, :uint64
-    "yaggo::conv_uint<#{$type_to_C_type[type]}>((const char *)#{arg}, err, #{si_suffix})"
+    "yaggo::conv_uint<#{$type_to_C_type[type]}>((const char*)#{arg}, err, #{suffix_arg(argv[0])})"
   when :int32, :int64, :long, :int
-    "yaggo::conv_int<#{$type_to_C_type[type]}>((const char *)#{arg}, err, #{si_suffix})"
+    "yaggo::conv_int<#{$type_to_C_type[type]}>((const char*)#{arg}, err, #{suffix_arg(argv[0])})"
   when :double
-    "yaggo::conv_double((const char *)#{arg}, err, #{si_suffix})"
+    "yaggo::conv_double((const char*)#{arg}, err, #{suffix_arg(argv[0])})"
+  when :enum
+    # Convert a string to its equivalent enum value
+    "yaggo::conv_enum((const char*)#{arg}, err, #{argv[0]})"
   end
 end
 
@@ -488,6 +516,8 @@ namespace yaggo {
     string() : std::string() {}
     string(const std::string &s) : std::string(s) {}
     string(const char *s) : std::string(s) {}
+    int as_enum(const char* const strs[]);
+
 EOS
       
       [:uint32, :uint64, :int32, :int64, :int, :long, :double].each do |type|
@@ -501,6 +531,7 @@ EOS
 
   bool adjust_double_si_suffix(double &res, const char *unit);
   double conv_double(const char *str, std::string &err, bool si_suffix);
+  int conv_enum(const char* str, std::string& err, const char* const strs[]);
 
   template<typename T>
   static bool adjust_int_si_suffix(T &res, const char *suffix) {
@@ -641,6 +672,14 @@ EOS
     end
 
     fd.puts(<<EOS)
+  int string::as_enum(const char* const strs[]) {
+    std::string err;
+    int res = #{str_conv("this->c_str()", :enum, "strs")};
+    if(!err.empty())
+      throw std::runtime_error(err);
+    return res;
+  }
+
   bool adjust_double_si_suffix(double &res, const char *suffix) {
     if(*suffix == '\\0')
       return true;
@@ -680,6 +719,23 @@ EOS
       return (double)0.0;
     }
     return res;
+  }
+
+  int conv_enum(const char* str, std::string& err, const char* const strs[]) {
+    int res = 0;
+    for(const char* const* cstr = strs; *cstr; ++cstr, ++res)
+      if(!strcmp(*cstr, str))
+        return res;
+    err += "Invalid constant '";
+    err += str;
+    err += "'. Expected one of { ";
+    for(const char* const* cstr = strs; *cstr; ++cstr) {
+      if(cstr != strs)
+        err += ", ";
+      err += *cstr;
+    }
+    err += " }";
+    return -1;
   }
 }
 EOS
@@ -729,6 +785,7 @@ def double;   $target.type = :double; end
 def string;   $target.type = :string; end
 def c_string; $target.type = :c_string; end
 def flag;     $target.type = :flag; end
+def enum(*argv); $target.type = :enum; $target.enum = argv; end
 
 def suffix; $target.suffix = true; end
 def required; $target.required = true; end
@@ -746,12 +803,13 @@ $option_variables = [:default, :typestr, :at_least]
 default = typestr = at_least = nil
 $main_binding = binding
 
-def default_val(val, type)
-  res = ""
-  res += '"' if @type == :string || @type == :c_string
-  res += val.to_s || $type_default[@type]
-  res += '"' if @type == :string || @type == :c_string
-  res
+def default_val(val, type, *argv)
+  case type
+  when :string, :c_string
+    "\"#{val || $type_default[type]}\""
+  else
+    val.to_s || $type_default[type]
+  end
 end
 
 class BaseOptArg
@@ -788,8 +846,8 @@ end
 
 class Option < BaseOptArg
   attr_accessor :description, :required, :typestr
-  attr_accessor :hidden, :multiple, :conflict
-  attr_reader :long, :short, :var, :type, :at_least, :default, :suffix
+  attr_accessor :hidden, :conflict, :multiple
+  attr_reader :long, :short, :var, :type, :at_least, :default, :suffix, :enum
 
   def initialize(long, short)
     @long, @short = long, short
@@ -799,6 +857,7 @@ class Option < BaseOptArg
     @suffix = false
     @at_least = nil
     @conflict = []
+    @enum = []
   end
 
   def on
@@ -845,8 +904,26 @@ class Option < BaseOptArg
     when :double
       (Float === v) || (String === v && v =~ /^[+-]?[\d.]+([eE][+-]?\d+)?$/) or
         raise "#{pref} Invalid double #{v}"
+    when :enum
+      v = v.to_i if v =~ /^\d+$/
+      case v
+      when Integer
+        (v >= 0 && v < @enum.size) or
+          raise "Default is out of range [0, #{@enum.size-1}]"
+      when String
+        nv = @enum.index(v) or
+          raise "Unknown constant '#{v}'. Should be one of { #{@enum.join(", ")} }"
+        v = nv
+      else
+        raise "Expected an Integer or a String"
+      end
     end
     @default = v
+  end
+
+  def enum=(*argv)
+    @type == :enum or raise "#{pref} Enum valid only for enum types."
+    @enum = argv.flatten
   end
 
   def check
@@ -856,6 +933,7 @@ class Option < BaseOptArg
     if multiple
       raise "#{pref} Multiple is meaningless with a flag" if type == :flag
       raise "#{pref} An option marked multiple cannot have a default value" unless default.nil?
+      raise "#{pref} Multiple is incompatible with enum type" if type == :enum
     end
     # case @type
     # when nil
@@ -874,12 +952,16 @@ class Option < BaseOptArg
     #   raise "#{pref} Suffix is meaningless for a flag" if @suffix
     # end
   end
-  
+
   def var_decl
     if @type == :flag
       ["#{"bool".ljust($typejust)} #{@var}_flag;"]
     else
       a = []
+      if @type == :enum 
+        a << "enum #{@var}_enum { #{@enum.map { |x| x.gsub(/[^a-zA-Z0-9_]/, "_") }.join(", ")} };"
+        a << ("static const char* const".ljust($typejust) + " #{@var}_strs[#{@enum.size + 1}];")
+      end
       if @multiple
         c_type = "std::vector<#{$type_to_C_type[@type]}>"
         a << (c_type.ljust($typejust) + " #{@var}_arg;")
@@ -894,7 +976,7 @@ class Option < BaseOptArg
 
   def init
     s = "#{@var}_#{@type == :flag ? "flag" : "arg"}("
-    s += default_val(@default, @type) unless @multiple
+    s += default_val(@default, @type, @enum) unless @multiple
     s += ")"
     unless @type == :flag
       s += ", #{@var}_given(false)"
@@ -915,7 +997,7 @@ class Option < BaseOptArg
     s += ", " unless @short.nil? || @long.nil?
     unless @long.nil?
       s += "--#{@long}"
-      s += "=#{@typestr || dflt_typestr(@type)}" unless @type == :flag
+      s += "=#{@typestr || dflt_typestr(@type, @enum)}" unless @type == :flag
     end
     s
   end
@@ -928,8 +1010,12 @@ class Option < BaseOptArg
   end
 
   def dump
-    if @type == :flag
+    case @type
+    when :flag
       ["\"#{@var}_flag:\"", "#{@var}_flag"]
+    when :enum
+      ["\"#{@var}_given:\"", "#{@var}_given",
+       "\" #{@var}_arg:\"", "#{@var}_arg", '"|"', "#{@var}_strs[#{@var}_arg]"]
     else
       ["\"#{@var}_given:\"", "#{@var}_given", 
        "\" #{@var}_arg:\"", @multiple ? "yaggo::vec_str(#{@var}_arg)" : "#{@var}_arg"]
@@ -947,6 +1033,9 @@ class Option < BaseOptArg
     when :uint32, :uint64, :int32, :int64, :int, :long, :double
       a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type, @suffix)});" : "#{@var}_arg = #{str_conv("optarg", @type, @suffix)};")
       a << "CHECK_ERR(#{@type}_t, optarg, \"#{switches}\")" 
+    when :enum
+      a << "#{@var}_arg = #{str_conv("optarg", @type, "#{@var}_strs")};"
+      a << "CHECK_ERR(#{@type}, optarg, \"#{switches}\")"
     end
     a
   end
@@ -1367,7 +1456,16 @@ EOS
   h.puts(<<EOS)
 private:
 };
+EOS
 
+  # Initialize static members
+  # TODO: Should we have an option to put this in a .cc file?
+  $options.each { |o|
+    next unless o.type == :enum
+    h.puts("const char* const #{class_name}::#{o.var}_strs[#{o.enum.size + 1}] = { #{o.enum.map { |x| "\"#{x}\"" }.join(", ") }, (const char*)0 };")
+  }
+
+h.puts(<<EOS)
 #endif // __#{class_name.upcase}_HPP__"
 EOS
 end
