@@ -20,9 +20,10 @@
 
 require 'optparse'
 
-options = {
+$yaggo_options = {
   :output => nil,
   :lib => false,
+  :license => nil,
   :prefix => nil,
   :local => false,
   :manual => false,
@@ -34,22 +35,25 @@ parser = OptionParser.new do |o|
   o.separator "Specific options:"
 
   o.on("-l", "--lib", "Output yaggo.{cpp,hpp}") {
-    options[:lib] = true
+    $yaggo_options[:lib] = true
   }
   o.on("-o", "--output FILE", "Output file") { |v|
-    options[:output] = v
+    $yaggo_options[:output] = v
   }
   o.on("-p", "--prefix PATH", "Prefix to include yaggo.hpp") { |v|
-    options[:prefix] = v
+    $yaggo_options[:prefix] = v
+  }
+  o.on("--license PATH", "License file to copy in header") { |v|
+    $yaggo_options[:license] = v
   }
   o.on("--local", "Local include (#include \"...\")") {
-    options[:local] = true
+    $yaggo_options[:local] = true
   }
   o.on("--man", "Manual page") {
-    options[:manual] = true
+    $yaggo_options[:manual] = true
   }
   o.on("--debug", "Debug yaggo") {
-    options[:debug] = true
+    $yaggo_options[:debug] = true
   }
 
   o.on_tail("-h", "--help", "Show this message") {
@@ -58,11 +62,11 @@ parser = OptionParser.new do |o|
   }
 end
 parser.parse! ARGV
-if !options[:lib] && !options[:manual] && ARGV.empty?
+if !$yaggo_options[:lib] && !$yaggo_options[:manual] && ARGV.empty?
   STDERR.puts "Error: some yaggo files and/or --lib switch is required", parser
   exit 1
 end
-if !options[:output].nil? && ARGV.size != 1
+if !$yaggo_options[:output].nil? && ARGV.size != 1
   STDERR.puts "Error: output switch meaningfull only with 1 input file", parser
   exit 1
 end
@@ -70,7 +74,7 @@ end
 ##############################
 # Display man page
 ##############################
-if options[:manual]
+if $yaggo_options[:manual]
   manual = <<'EOS'
 .TH yaggo 1  "2011-10-06" "version 1.0" "USER COMMANDS"
 
@@ -429,18 +433,18 @@ def str_conv(arg, type, suffix)
 end
 
 # Path to include yaggo.hpp in C
-$inc_path = options[:local] ? '"' : '<'
-if options[:prefix]
-  $inc_path += File.join(options[:prefix], "yaggo.hpp")
+$inc_path = $yaggo_options[:local] ? '"' : '<'
+if $yaggo_options[:prefix]
+  $inc_path += File.join($yaggo_options[:prefix], "yaggo.hpp")
 else
   $inc_path += "yaggo.hpp"
 end
-$inc_path += options[:local] ? '"' : '>'
+$inc_path += $yaggo_options[:local] ? '"' : '>'
 
 ##############################
 # Output library
 ##############################
-if options[:lib]
+if $yaggo_options[:lib]
   open("yaggo.hpp", "w") do |fd|
     fd.puts(<<EOS)
 /* Copyright (c) 2011 Guillaume Marcais
@@ -1123,6 +1127,11 @@ EOS
     lines = $license.split(/\n/)
     h.puts("/* #{lines[0]}", *(lines[1..-1].map { |l| " * " + l }))
     h.puts(" */", "")
+  elsif $yaggo_options[:license]
+    open($yaggo_options[:license]) { |fd|
+      h.puts(fd.read)
+    }
+    h.puts("")
   end
 
 h.puts(<<EOS)
@@ -1379,25 +1388,25 @@ ARGV.each do |input_file|
       parsed = true
       check_conflict_exclude
     rescue RuntimeError, SyntaxError, Errno::ENOENT, Errno::EACCES => e
-      raise e if options[:debug]
+      raise e if $yaggo_options[:debug]
       STDERR.puts(e.message.gsub(/^\(eval\)/, input_file))
       exit 1
     rescue NoMethodError => e
-      raise e if options[:debug]
+      raise e if $yaggo_options[:debug]
       STDERR.puts("Invalid keyword '#{e.name}'")
       exit 1
     end
 
     fsplit    = File.basename(input_file).split(/\./)
     $class  ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
-    $output   = options[:output] if options[:output]
+    $output   = $yaggo_options[:output] if $yaggo_options[:output]
     $output ||= input_file.gsub(/\.yaggo$/, "") + ".hpp"
     
     begin
       out_fd = open($output, "w")
       output_cpp_parser(out_fd, $class)
     rescue RuntimeError => e
-      raise e if options[:debug]
+      raise e if $yaggo_options[:debug]
       STDERR.puts("#{input_file}: #{e.message}")
       exit 1
     ensure
