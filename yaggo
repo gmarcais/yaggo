@@ -284,6 +284,10 @@ conflict
 Specify a comma separated list of switches that conflicts with this
 one.
 .TP
+imply
+Specify a comma separated list of switches (of type flag) which are
+implied by this one.
+.TP
 hidden
 This switch is not shown with --help. Use --full-help to see the
 hidden switches, if any.
@@ -743,7 +747,8 @@ def default str; $target.default = str; end
 def typestr str; $target.typestr = str; end
 def multiple; $target.multiple = true; end
 def at_least n; $target.at_least = n; end
-def conflict *a; $target.conflict += a; end
+def conflict *a; $target.conflict= a; end
+def imply *a; $target.imply= a; end
 # Define the following local variables and check their value after
 # yielding the block to catch syntax such as default="value".
 $option_variables = [:default, :typestr, :at_least]
@@ -792,8 +797,8 @@ end
 
 class Option < BaseOptArg
   attr_accessor :description, :required, :typestr
-  attr_accessor :hidden, :multiple, :conflict
-  attr_reader :long, :short, :var, :type, :at_least, :default, :suffix
+  attr_accessor :hidden, :multiple
+  attr_reader :long, :short, :var, :type, :at_least, :default, :suffix, :conflict, :imply
 
   def initialize(long, short)
     @long, @short = long, short
@@ -803,6 +808,7 @@ class Option < BaseOptArg
     @suffix = false
     @at_least = nil
     @conflict = []
+    @imply = []
   end
 
   def on
@@ -852,6 +858,9 @@ class Option < BaseOptArg
     end
     @default = v
   end
+
+  def conflict= a; @conflict += a.map { |x| x.gsub(/^-+/, "") }; end
+  def imply= a; @imply += a.map { |x| x.gsub(/^-+/, "") }; end
 
   def check
     pref = "Option #{long || ""}|#{short || ""}:"
@@ -941,8 +950,9 @@ class Option < BaseOptArg
   end
 
   def parse_arg
-    return ["#{@var}_flag = true;"] if @type == :flag
-    a = ["#{@var}_given = true;"]
+    a = @imply.map { |ios| "#{$opt_hash[ios].var}_flag = true;" }
+    return a + ["#{@var}_flag = true;"] if @type == :flag
+    a << "#{@var}_given = true;"
     case @type
     when :string
       a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type, false)});" : "#{@var}_arg.assign(optarg);")
@@ -1099,8 +1109,16 @@ def check_conflict_exclude
   }
   $options.each { |o|
     o.conflict.each { |co|
-      $opt_hash[co.gsub(/^-+/, "")] or 
+      $opt_hash[co] or 
       raise "Unknown conflict option '#{co}' for switch #{o.long}|#{o.short}"
+    }
+  }
+  $options.each { |o|
+    o.imply.each { |ios|
+      io = $opt_hash[ios] or
+      raise "Unknown implied option '#{io}' for switch #{o.long}|#{o.short}"
+      io.type == :flag or
+      raise "Implied option '#{io}' for switch #{o.long}|#{o.short} is not a flag"
     }
   }
 end
