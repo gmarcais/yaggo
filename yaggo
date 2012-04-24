@@ -220,6 +220,10 @@ name
 The name of the class generated. Defaults to the name of the
 description file minus the .yaggo extension.
 .TP
+posix
+Posix correct behavior (instead of GNU behavior): switch processing
+stops at the first non-option argument
+.TP
 output
 The name of the output file. Defaults to the name of the
 description file with the .yaggo extension changed to .hpp.
@@ -717,9 +721,10 @@ def purpose str; $purpose = str; end
 def package str; $package = str; end
 def description str; $target.description = str; end
 def version str; $version = str; end
+def posix *args; $posix = true; end
 def license str; $license = str; end
 $global_variables = [:output, :name, :purpose, :package,
-                     :description, :version, :license]
+                     :description, :version, :license, :posix]
 output = name = purpose = package = description = version = license = nil
 
 # def set_type t
@@ -1196,7 +1201,7 @@ EOS
   h.puts("      {\"usage\", 0, 0, USAGE_OPT},",
          "      {\"version\", 0, 0, #{version_no_V ? "VERSION_OPT" : "'V'"}},",
          "      {0, 0, 0, 0}", "    };")
-  short_str = ""
+  short_str = $posix ? "+" : ""
   short_str += "h" unless help_no_h
   short_str += "V" unless version_no_V
   short_str += $options.map { |o| o.short_str }.compact.join("")
