@@ -20,9 +20,10 @@
 
 require 'optparse'
 
-options = {
+$yaggo_options = {
   :output => nil,
   :lib => false,
+  :license => nil,
   :prefix => nil,
   :local => false,
   :manual => false,
@@ -36,22 +37,25 @@ parser = OptionParser.new do |o|
   o.separator "Specific options:"
 
   o.on("-l", "--lib", "Output yaggo.{cpp,hpp}") {
-    options[:lib] = true
+    $yaggo_options[:lib] = true
   }
   o.on("-o", "--output FILE", "Output file") { |v|
-    options[:output] = v
+    $yaggo_options[:output] = v
   }
   o.on("-p", "--prefix PATH", "Prefix to include yaggo.hpp") { |v|
-    options[:prefix] = v
+    $yaggo_options[:prefix] = v
+  }
+  o.on("--license PATH", "License file to copy in header") { |v|
+    $yaggo_options[:license] = v
   }
   o.on("--local", "Local include (#include \"...\")") {
-    options[:local] = true
+    $yaggo_options[:local] = true
   }
   o.on("--man", "Manual page") {
-    options[:manual] = true
+    $yaggo_options[:manual] = true
   }
   o.on("--debug", "Debug yaggo") {
-    options[:debug] = true
+    $yaggo_options[:debug] = true
   }
 
   o.on_tail("-h", "--help", "Show this message") {
@@ -60,11 +64,11 @@ parser = OptionParser.new do |o|
   }
 end
 parser.parse! ARGV
-if !options[:lib] && !options[:manual] && ARGV.empty?
+if !$yaggo_options[:lib] && !$yaggo_options[:manual] && ARGV.empty?
   STDERR.puts "Error: some yaggo files and/or --lib switch is required", parser
   exit 1
 end
-if !options[:output].nil? && ARGV.size != 1
+if !$yaggo_options[:output].nil? && ARGV.size != 1
   STDERR.puts "Error: output switch meaningfull only with 1 input file", parser
   exit 1
 end
@@ -72,7 +76,7 @@ end
 ##############################
 # Display man page
 ##############################
-if options[:manual]
+if $yaggo_options[:manual]
   manual = <<EOS
 .TH yaggo 1  "2012-03-09" "version #{$yaggo_version}" "USER COMMANDS"
 
@@ -224,6 +228,10 @@ name
 The name of the class generated. Defaults to the name of the
 description file minus the .yaggo extension.
 .TP
+posix
+Posix correct behavior (instead of GNU behavior): switch processing
+stops at the first non-option argument
+.TP
 output
 The name of the output file. Defaults to the name of the
 description file with the .yaggo extension changed to .hpp.
@@ -297,6 +305,10 @@ command line.
 conflict
 Specify a comma separated list of switches that conflicts with this
 one.
+.TP
+imply
+Specify a comma separated list of switches (of type flag) which are
+implied by this one.
 .TP
 hidden
 This switch is not shown with --help. Use --full-help to see the
@@ -457,18 +469,18 @@ def str_conv(arg, type, *argv)
 end
 
 # Path to include yaggo.hpp in C
-$inc_path = options[:local] ? '"' : '<'
-if options[:prefix]
-  $inc_path += File.join(options[:prefix], "yaggo.hpp")
+$inc_path = $yaggo_options[:local] ? '"' : '<'
+if $yaggo_options[:prefix]
+  $inc_path += File.join($yaggo_options[:prefix], "yaggo.hpp")
 else
   $inc_path += "yaggo.hpp"
 end
-$inc_path += options[:local] ? '"' : '>'
+$inc_path += $yaggo_options[:local] ? '"' : '>'
 
 ##############################
 # Output library
 ##############################
-if options[:lib]
+if $yaggo_options[:lib]
   open("yaggo.hpp", "w") do |fd|
     fd.puts(<<EOS)
 /* Copyright (c) 2011 Guillaume Marcais
@@ -765,9 +777,10 @@ def purpose str; $purpose = str; end
 def package str; $package = str; end
 def description str; $target.description = str; end
 def version str; $version = str; end
+def posix *args; $posix = true; end
 def license str; $license = str; end
 $global_variables = [:output, :name, :purpose, :package,
-                     :description, :version, :license]
+                     :description, :version, :license, :posix]
 output = name = purpose = package = description = version = license = nil
 
 # def set_type t
@@ -796,7 +809,8 @@ def default str; $target.default = str; end
 def typestr str; $target.typestr = str; end
 def multiple; $target.multiple = true; end
 def at_least n; $target.at_least = n; end
-def conflict *a; $target.conflict += a; end
+def conflict *a; $target.conflict= a; end
+def imply *a; $target.imply= a; end
 # Define the following local variables and check their value after
 # yielding the block to catch syntax such as default="value".
 $option_variables = [:default, :typestr, :at_least]
@@ -848,6 +862,7 @@ class Option < BaseOptArg
   attr_accessor :description, :required, :typestr
   attr_accessor :hidden, :conflict, :multiple
   attr_reader :long, :short, :var, :type, :at_least, :default, :suffix, :enum
+  attr_reader :conflict, :imply
 
   def initialize(long, short)
     @long, @short = long, short
@@ -858,6 +873,7 @@ class Option < BaseOptArg
     @at_least = nil
     @conflict = []
     @enum = []
+    @imply = []
   end
 
   def on
@@ -925,6 +941,9 @@ class Option < BaseOptArg
     @type == :enum or raise "#{pref} Enum valid only for enum types."
     @enum = argv.flatten
   end
+
+  def conflict= a; @conflict += a.map { |x| x.gsub(/^-+/, "") }; end
+  def imply= a; @imply += a.map { |x| x.gsub(/^-+/, "") }; end
 
   def check
     pref = "Option #{long || ""}|#{short || ""}:"
@@ -1036,8 +1055,9 @@ class Option < BaseOptArg
   end
 
   def parse_arg
-    return ["#{@var}_flag = true;"] if @type == :flag
-    a = ["#{@var}_given = true;"]
+    a = @imply.map { |ios| "#{$opt_hash[ios].var}_flag = true;" }
+    return a + ["#{@var}_flag = true;"] if @type == :flag
+    a << "#{@var}_given = true;"
     case @type
     when :string
       a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type, false)});" : "#{@var}_arg.assign(optarg);")
@@ -1197,8 +1217,16 @@ def check_conflict_exclude
   }
   $options.each { |o|
     o.conflict.each { |co|
-      $opt_hash[co.gsub(/^-+/, "")] or 
+      $opt_hash[co] or 
       raise "Unknown conflict option '#{co}' for switch #{o.long}|#{o.short}"
+    }
+  }
+  $options.each { |o|
+    o.imply.each { |ios|
+      io = $opt_hash[ios] or
+      raise "Unknown implied option '#{io}' for switch #{o.long}|#{o.short}"
+      io.type == :flag or
+      raise "Implied option '#{io}' for switch #{o.long}|#{o.short} is not a flag"
     }
   }
 end
@@ -1225,6 +1253,11 @@ EOS
     lines = $license.split(/\n/)
     h.puts("/* #{lines[0]}", *(lines[1..-1].map { |l| " * " + l }))
     h.puts(" */", "")
+  elsif $yaggo_options[:license]
+    open($yaggo_options[:license]) { |fd|
+      h.puts(fd.read)
+    }
+    h.puts("")
   end
 
 h.puts(<<EOS)
@@ -1274,7 +1307,7 @@ EOS
   h.puts("      {\"usage\", 0, 0, USAGE_OPT},",
          "      {\"version\", 0, 0, #{version_no_V ? "VERSION_OPT" : "'V'"}},",
          "      {0, 0, 0, 0}", "    };")
-  short_str = ""
+  short_str = $posix ? "+" : ""
   short_str += "h" unless help_no_h
   short_str += "V" unless version_no_V
   short_str += $options.map { |o| o.short_str }.compact.join("")
@@ -1493,25 +1526,25 @@ ARGV.each do |input_file|
       parsed = true
       check_conflict_exclude
     rescue RuntimeError, SyntaxError, Errno::ENOENT, Errno::EACCES => e
-      raise e if options[:debug]
+      raise e if $yaggo_options[:debug]
       STDERR.puts(e.message.gsub(/^\(eval\)/, input_file))
       exit 1
     rescue NoMethodError => e
-      raise e if options[:debug]
+      raise e if $yaggo_options[:debug]
       STDERR.puts("Invalid keyword '#{e.name}'")
       exit 1
     end
 
     fsplit    = File.basename(input_file).split(/\./)
     $class  ||= fsplit.size > 1 ? fsplit[0..-2].join(".") : fsplit[0]
-    $output   = options[:output] if options[:output]
+    $output   = $yaggo_options[:output] if $yaggo_options[:output]
     $output ||= input_file.gsub(/\.yaggo$/, "") + ".hpp"
     
     begin
       out_fd = open($output, "w")
       output_cpp_parser(out_fd, $class)
     rescue RuntimeError => e
-      raise e if options[:debug]
+      raise e if $yaggo_options[:debug]
       STDERR.puts("#{input_file}: #{e.message}")
       exit 1
     ensure
