@@ -862,7 +862,7 @@ class Option < BaseOptArg
   attr_accessor :description, :required, :typestr
   attr_accessor :hidden, :conflict, :multiple
   attr_reader :long, :short, :var, :type, :at_least, :default, :suffix, :enum
-  attr_reader :conflict, :imply
+  attr_reader :imply
 
   def initialize(long, short)
     @long, @short = long, short
@@ -988,6 +988,10 @@ class Option < BaseOptArg
       ["#{"bool".ljust($typejust)} #{@var}_flag;"]
     else
       a = []
+      if @type == :enum 
+        a << "enum #{@var}_enum { #{@enum.map { |x| x.gsub(/[^a-zA-Z0-9_]/, "_") }.join(", ")} };"
+        a << ("static const char* const".ljust($typejust) + " #{@var}_strs[#{@enum.size + 1}];")
+      end
       if @multiple
         c_type = "std::vector<#{$type_to_C_type[@type]}>"
         a << (c_type.ljust($typejust) + " #{@var}_arg;")
