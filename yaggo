@@ -1121,6 +1121,13 @@ class Arg < BaseOptArg
     end
   end
 
+  def init
+    s = "#{@var}_arg("
+    s += default_val(@default, @type) unless @multiple
+    s += ")"
+    s
+  end
+
   def dump
     ["\"#{@var}_arg:\"",
      @multiple ? "yaggo::vec_str(#{@var}_arg)" : "#{@var}_arg"]
@@ -1293,15 +1300,16 @@ EOS
 
   # Constructors and initialization
   h.puts("", "  #{class_name}() : ")
-  h.puts("    " + $options.map { |o| o.init }.join(",\n    "), "  { }")
+  h.puts("    " + ($options + $args).map { |o| o.init }.join(",\n    "), "  { }")
   h.puts("", "  #{class_name}(int argc, char* argv[]) :")
-  h.puts("    " + $options.map { |o| o.init }.join(",\n    "))
+  h.puts("    " + ($options + $args).map { |o| o.init }.join(",\n    "))
   h.puts("  { parse(argc, argv); }", "");
 
   # Main arsing function
   h.puts("  void parse(int argc, char* argv[]) {",
          "    static struct option long_options[] = {")
-  h.puts("      " + $options.map { |o| o.struct }.join(",\n      ") + ",")
+  $options.empty? or
+    h.puts("      " + $options.map { |o| o.struct }.join(",\n      ") + ",")
   h.puts("      {\"help\", 0, 0, #{help_no_h ? "HELP_OPT" : "'h'"}},")
   h.puts("      {\"full-help\", 0, 0, FULL_HELP_OPT},") if need_full
   h.puts("      {\"usage\", 0, 0, USAGE_OPT},",
