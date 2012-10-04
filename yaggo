@@ -115,17 +115,23 @@ See the EXAMPLES section for a complete and simple example.
 \-l|\-\-lib
 Generate the yaggo.cpp and yaggo.hpp files.
 .TP
-\-p|\-\-path
-Path to find yaggo.hpp to prepend to the #include statements.
+\-p|\-\-prefix
+Path to find yaggo.hpp to prepend to the \#include statements. Makes
+this match your development tree.
 .TP
 \-\-local Generate locate include statements (#include "...") instead
 of system statements (#include <...>).
 .TP
+\-\-license
+Display the file at the top of the generated headers. It usually
+contains the license governing the distribution of the headers.
+.TP
 \-\-man
 Display this man page
 .TP
-\-h|--help
-display a short help text
+\-s|\-\-stub
+Generate a stub: a simple yaggo file that can be modified for one's use.
+.TP \-h|--help display a short help text
 
 .SH EXAMPLES
 Here is a fully working example. Consider the description
