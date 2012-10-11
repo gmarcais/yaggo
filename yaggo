@@ -283,19 +283,23 @@ Display version string.
 .PP
 
 The following statement are recognized in an option block:
+
 .TP
 description "str"
 A short description for this switch.
+
 .TP
 int32, int64, uint32, uint64, double, int, long
 This switch is parsed as a number with the corresponding type int32_t,
 int64_t, uint32_t, uint64_t, double, int and long.
+
 .TP
 suffix
 Valid for numerical type switches as above. It can be appended
 with a SI suffix (e.g. 1M mean 1000000). The suffixes k, M, G, T, P,
 and E are supported for all the numerical types. The suffixes m, u, n,
 p, f, and a are supported for the double type.
+
 .TP
 c_string, string
 This switch is taken as a C string (const char *) or a C++ string
@@ -303,15 +307,13 @@ This switch is taken as a C string (const char *) or a C++ string
 methods '<type> as_<type>(bool suffix)', where <type> is any numerical
 type as above, to convert the string into that type. If the 'suffix'
 boolean is true, parsing is done using SI suffixes.
+
 .TP
 enum
-
 This statement must be followed by a comma separated list of strings
 (as in 'enum "choice0", "choice1, "choice2"'). This switch takes value
 a string in the list and is converted to int and a C enum type named
 'switchname_enum' is defined with the same choices in the given order.
-
-
 
 .TP
 required
@@ -351,9 +353,25 @@ displayed. It can be replaced by the string given to 'typestr'.
 .TP
 at_least n
 The given switch must be given at least n times. Implies multiple.
+.TP
+access "type"
+
+Make sure that the string passed is a path to which we have
+access. "type" is a comma separated list of "read", "write" or
+"exec". It is checked with access(2). The same warning applies:
+
+"Warning: Using access() to check if a user is authorized to, for
+example, open a file before actually doing so using open(2) creates a
+security hole, because the user might exploit the short time interval
+between checking and opening the file to manipulate it.  For this
+reason, the use of this system call should be avoided.  (In the
+example just described, a safer alternative would be to temporarily
+switch the process's effective user ID to the real ID and then call
+open(2).)"
+
 .PP
 
-A 'arg' statement defines an arg passed to the command line. The
+A 'arg' statement defines an arg passed nnto the command line. The
 statement takes a single argument, the name of the arg, and a block of
 statements. The block of statements are similar to the option block,
 except that hidden, flag, on and off are not allowed. At most one arg
@@ -562,6 +580,7 @@ if $yaggo_options[:lib]
 #define __YAGGO_HPP__
 
 #include <stdint.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <getopt.h>
 #include <errno.h>
@@ -862,6 +881,7 @@ def multiple; $target.multiple = true; end
 def at_least n; $target.at_least = n; end
 def conflict *a; $target.conflict= a; end
 def imply *a; $target.imply= a; end
+def access *types; $target.access= types; end
 # Define the following local variables and check their value after
 # yielding the block to catch syntax such as default="value".
 $option_variables = [:default, :typestr, :at_least]
@@ -907,11 +927,23 @@ class BaseOptArg
     end
     @suffix = t
   end
+
+  def access=(types)
+    types.all? { |t| ["read", "write", "exec"].include?(t) } or
+      raise "Invalid access type(s): #{types.join(", ")}"
+    @access_types = types
+  end
+
+  def check
+    if !@access_types.empty? && @type != :c_string
+      raise "Access checking is valid only with a path (a c_string)"
+    end
+  end
 end
 
 class Option < BaseOptArg
   attr_accessor :description, :required, :typestr
-  attr_accessor :hidden, :conflict, :multiple
+  attr_accessor :hidden, :conflict, :multiple, :access_types
   attr_reader :long, :short, :var, :type, :at_least, :default, :suffix, :enum
   attr_reader :imply
 
@@ -925,6 +957,7 @@ class Option < BaseOptArg
     @conflict = []
     @enum = []
     @imply = []
+    @access_types = []
   end
 
   def on
@@ -1005,6 +1038,9 @@ class Option < BaseOptArg
       raise "#{pref} An option marked multiple cannot have a default value" unless default.nil?
       raise "#{pref} Multiple is incompatible with enum type" if type == :enum
     end
+
+    super
+
     # case @type
     # when nil
     #   raise "#{pref} No type specified"
@@ -1127,14 +1163,15 @@ class Option < BaseOptArg
 end
 
 class Arg < BaseOptArg
-  attr_accessor :description, :type, :typestr, :multiple
-  attr_reader :name, :at_least, :suffix
+  attr_accessor :description, :type, :typestr, :multiple, :access_types
+  attr_reader :name, :at_least, :suffix, :var
   def initialize(str)
     @name = str
     @var = @name.gsub(/[^a-zA-Z0-9_]/, "_")
     @type = nil
     @at_least = 0
     @suffix = false
+    @access_types = []
   end
 
   def type=(t)
@@ -1158,6 +1195,8 @@ class Arg < BaseOptArg
   end
 
   def check
+    super
+
     pref = "Arg #{name}:"
     raise "#{pref} No type specified" if type.nil?
   end
@@ -1470,6 +1509,23 @@ EOS
 EOS
   end
   $args.each { |a| h.puts("    " + a.parse_arg.join("\n    ")) }
+
+  # Check access rights
+  if ($options + $args).any? { |o| !o.access_types.empty? }
+    h.puts("", "    // Check access rights")
+    ($args + $options).each { |o|
+      next if o.access_types.empty?
+      r_to_f = { "read" => "R_OK", "write" => "W_OK", "exec" => "X_OK" }
+      mode = o.access_types.map { |t| r_to_f[t] }.join("|")
+      msg = Arg === o ? "Argument " + o.name : "Switch " + o.switches
+      msg += ", access right (#{o.access_types.join("|")}) failed for file '"
+      h.puts("    if(access(#{o.var}_arg, #{mode})) {",
+             "      std::string err(\"#{msg}\");",
+             "      ((err += #{o.var}_arg) += \"': \") += strerror(errno);",
+             "      error(err.c_str());",
+             "    }")
+    }
+  end
 
   h.puts("  }") # close parser
 
