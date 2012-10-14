@@ -23,7 +23,7 @@ option("threads", "t") {
 }
 option("output", "o") {
   string; default "mer_counts"; description "Output prefix"
-  conflict "c", "high"
+  conflict "c", "high"; typestr "dir"
 }
 option("counter-len", "c") {
   uint32; default "7"; typestr "Length in bits"
@@ -35,7 +35,7 @@ option("high", "h") {
 option("severity") {
   description "Severity description"
   enum "low", "middle", "high"
-  default 2
+#  default 2
 }
 # option("out-counter-len") {
 #   hidden; uint32; default "4"; typestr "Length in bytes"
@@ -66,9 +66,12 @@ option("verra") {
   string; typestr "who knows but it is way too long anyhow."
   description "On verra"
 }
+option("file") {
+  description "file"
+  c_string; access("write"); typestr "path" }
 arg("first") {
-  string; typestr "path"
-  description "First"
+  c_string; typestr "path"
+  description "First"; access "read", "exec"
 }
 arg("second") {
   uint32; multiple

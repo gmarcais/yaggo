@@ -20,10 +20,10 @@ int main(int argc, char *argv[])
   CONV(int32);
   CONV(int64);
   CONV(double);
-  if(args.severity_arg == count_cmdline::low)
+  if(args.severity_arg == count_cmdline::severity::low)
     std::cout << "Pfiou!\n";
   try {
-    std::cout << args.verra_arg.as_enum(count_cmdline::severity_strs) << "\n";
+    std::cout << args.verra_arg.as_enum(count_cmdline::severity::strs) << "\n";
   } catch(std::exception& e) {
     std::cerr << "Conv to enum failed: " << e.what() << std::endl;
   }
