@@ -1,4 +1,6 @@
-.TH yaggo 1  "2011-10-06" "version 1.0" "USER COMMANDS"
+def display_man_page out
+  manual = <<EOS
+.TH yaggo 1  "2012-03-09" "version #{$yaggo_version}" "USER COMMANDS"
 
 .SH NAME
 yaggo \- command line switch parser generator
@@ -25,17 +27,23 @@ See the EXAMPLES section for a complete and simple example.
 \-l|\-\-lib
 Generate the yaggo.cpp and yaggo.hpp files.
 .TP
-\-p|\-\-path
-Path to find yaggo.hpp to prepend to the #include statements.
+\-p|\-\-prefix
+Path to find yaggo.hpp to prepend to the \#include statements. Makes
+this match your development tree.
 .TP
 \-\-local Generate locate include statements (#include "...") instead
 of system statements (#include <...>).
 .TP
+\-\-license
+Display the file at the top of the generated headers. It usually
+contains the license governing the distribution of the headers.
+.TP
 \-\-man
 Display this man page
 .TP
-\-h|--help
-display a short help text
+\-s|\-\-stub
+Generate a stub: a simple yaggo file that can be modified for one's use.
+.TP \-h|--help display a short help text
 
 .SH EXAMPLES
 Here is a fully working example. Consider the description
@@ -57,6 +65,9 @@ option("string", "s") {
 option("flag") {
   description "A flag switch"
   flag; off }
+option("severity") {
+  description "An enum switch"
+  enum "low", "middle", "high" }
 arg("first") {
   description "First arg"
   c_string }
@@ -74,13 +85,16 @@ The associated simple C++ program 'examples.cpp' which display information about
 int main(int argc, char *argv[]) {
   example_args args(argc, argv);
 
-  std::cout << "Integer switch: " << args.int_arg << "\\n";
+  std::cout << "Integer switch: " << args.int_arg << "\\\\n";
   if(args.string_given)
-    std::cout << "Number of string(s): " << args.string_arg.size() << "\\n";
+    std::cout << "Number of string(s): " << args.string_arg.size() << "\\\\n";
   else
-    std::cout << "No string switch\\n";
-  std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\n";
-  std::cout << "First arg: " << args.first_arg << "\\n";
+    std::cout << "No string switch\\\\n";
+  std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\\\n";
+  std::cout << "First arg: " << args.first_arg << "\\\\n";
+  std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity_strs[args.severity_arg] << "\\\\n";
+  if(args.severity_arg == example_args::high)
+    std::cout << "Warning: severity is high\\\\n";
   std::cout << "Rest:";
   for(example_args::rest_arg_it it = args.rest_arg.begin(); it != args.rest_arg.end(); ++it)
     std::cout << " " << *it;
@@ -96,6 +110,15 @@ This can be compiled with the following commands:
 % yaggo --lib --local example_args.yaggo
 % g++ -o example example.cpp yaggo.cpp
 .fi
+
+The yaggo command above will create by default the file
+'example_args.hpp' (changed '.yaggo' extension to '.hpp'). The output
+file name can be changed with the 'output' keyword explained below.
+
+The '--lib' switch asks yaggo to create the common files 'yaggo.hpp'
+and 'yaggo.cc'. This switch is needed only once. The next time yaggo
+is run, the --lib switch is not needed, as the common files are fixed
+and do not depend on the input file 'example_args.yaggo'.
 
 .SH DESCRIPTION FORMAT
 
@@ -133,6 +156,10 @@ name
 The name of the class generated. Defaults to the name of the
 description file minus the .yaggo extension.
 .TP
+posix
+Posix correct behavior (instead of GNU behavior): switch processing
+stops at the first non-option argument
+.TP
 output
 The name of the output file. Defaults to the name of the
 description file with the .yaggo extension changed to .hpp.
@@ -168,19 +195,23 @@ Display version string.
 .PP
 
 The following statement are recognized in an option block:
+
 .TP
 description "str"
 A short description for this switch.
+
 .TP
-int32, int64, uint32, uint64, double
+int32, int64, uint32, uint64, double, int, long
 This switch is parsed as a number with the corresponding type int32_t,
-int64_t, uint32_t, uint64_t and double.
+int64_t, uint32_t, uint64_t, double, int and long.
+
 .TP
 suffix
 Valid for numerical type switches as above. It can be appended
 with a SI suffix (e.g. 1M mean 1000000). The suffixes k, M, G, T, P,
 and E are supported for all the numerical types. The suffixes m, u, n,
 p, f, and a are supported for the double type.
+
 .TP
 c_string, string
 This switch is taken as a C string (const char *) or a C++ string
@@ -188,10 +219,26 @@ This switch is taken as a C string (const char *) or a C++ string
 methods '<type> as_<type>(bool suffix)', where <type> is any numerical
 type as above, to convert the string into that type. If the 'suffix'
 boolean is true, parsing is done using SI suffixes.
+
+.TP
+enum
+This statement must be followed by a comma separated list of strings
+(as in 'enum "choice0", "choice1, "choice2"'). This switch takes value
+a string in the list and is converted to int and a C enum type named
+'switchname_enum' is defined with the same choices in the given order.
+
 .TP
 required
 This switch is required. An error is generated if not given on the
 command line.
+.TP
+conflict
+Specify a comma separated list of switches that conflicts with this
+one.
+.TP
+imply
+Specify a comma separated list of switches (of type flag) which are
+implied by this one.
 .TP
 hidden
 This switch is not shown with --help. Use --full-help to see the
@@ -206,7 +253,7 @@ flag
 This switch is a flag and does not take an argument.
 .TP
 on, off
-The default state for a flag switch.
+The default state for a flag switch. Implies flag.
 .TP
 default "val"
 The default value for this switch. It must be passed as a string
@@ -215,19 +262,32 @@ The default value for this switch. It must be passed as a string
 typestr "str"
 In the help message, by default, the type of the option is
 displayed. It can be replaced by the string given to 'typestr'.
+.TP
+at_least n
+The given switch must be given at least n times. Implies multiple.
+.TP
+access "type"
+
+Make sure that the string passed is a path to which we have
+access. "type" is a comma separated list of "read", "write" or
+"exec". It is checked with access(2). The same warning applies:
+
+"Warning: Using access() to check if a user is authorized to, for
+example, open a file before actually doing so using open(2) creates a
+security hole, because the user might exploit the short time interval
+between checking and opening the file to manipulate it.  For this
+reason, the use of this system call should be avoided.  (In the
+example just described, a safer alternative would be to temporarily
+switch the process's effective user ID to the real ID and then call
+open(2).)"
+
 .PP
 
-A 'arg' statement defines an arg passed to the command line. The
+A 'arg' statement defines an arg passed nnto the command line. The
 statement takes a single argument, the name of the arg, and a block of
 statements. The block of statements are similar to the option block,
 except that hidden, flag, on and off are not allowed. At most one arg
-can have the 'multiple' statement, and it must be the last one. In
-addition, the arg recognizes one extra statement.
-
-.TP
-at_least n
-At least n args must be given. Defaults to 0.
-.PP
+can have the 'multiple' statement, and it must be the last one.
 
 .SH LICENSE
 
@@ -264,3 +324,20 @@ The error message returned by ruby can be a little confusing.
 Guillaume Marcais (gmarcais@umd.edu)
 .SH SEE ALSO
 getopt_long(3), gengetopt(1)
+EOS
+
+  if out.isatty
+    require 'tempfile'
+    Tempfile.open("yaggo_man") do |fd|
+      begin
+        fd.write(manual)
+        fd.flush
+        system("man", fd.path)
+      ensure
+        fd.unlink
+      end
+    end
+  else
+    out.puts(manual)
+  end
+end
