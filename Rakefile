@@ -33,3 +33,9 @@ task :yaggo do |t|
 end
 
 task :default => :yaggo
+
+task :dist do |t|
+  system("tar", "-zc", "-f", "yaggo-#{spec.version}.tar.gz",
+         "--transform", "s|^|yaggo-#{spec.version}/|",
+         "README", "setup.rb", "bin", "lib")
+end
