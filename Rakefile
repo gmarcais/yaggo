@@ -4,7 +4,7 @@ require 'rubygems/package_task'
 
 spec = Gem::Specification.new do |s|
   s.name        = "yaggo"
-  s.version     = "1.2.0"
+  s.version     = "1.3.0"
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["Guillaume Marçais"]
   s.email       = ["gmarcais@umd.edu"]
@@ -59,7 +59,7 @@ end
 
 task :exec do |t|
   loaded = {}
-  open("yaggo", "w") do |wfd|
+  open("yaggo", "w", 0755) do |wfd|
     open("bin/yaggo", "r") do |rfd|
       inline_includes(rfd, wfd, loaded)
     end
