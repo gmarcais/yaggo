@@ -1,68 +1,78 @@
-def output_library_header file
-  open(file, "w") do |fd|
-    fd.puts(<<EOS)
-/* Copyright (c) 2011 Guillaume Marcais
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use,
- * copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following
- * conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- */
+# This file is part of Yaggo.
 
-#ifndef __YAGGO_HPP__
-#define __YAGGO_HPP__
+# Yaggo is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 
-#include <stdint.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <getopt.h>
-#include <errno.h>
-#include <string.h>
-#include <stdexcept>
-#include <string>
-#include <limits>
-#include <vector>
-#include <iostream>
-#include <sstream>
+# Yaggo is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
 
-namespace yaggo {
-  class string : public std::string {
-  public:
-    string() : std::string() {}
-    string(const std::string &s) : std::string(s) {}
-    string(const char *s) : std::string(s) {}
-    int as_enum(const char* const strs[]);
+# You should have received a copy of the GNU General Public License
+# along with Yaggo.  If not, see <http://www.gnu.org/licenses/>.
 
-EOS
 
-      [:uint32, :uint64, :int32, :int64, :int, :long, :double].each do |type|
-        fd.puts(<<EOS)
-    #{$type_to_C_type[type]} as_#{type}_suffix() const { return as_#{type}(true); }
-    #{$type_to_C_type[type]} as_#{type}(bool si_suffix = false) const;
-EOS
-      end
-      fd.puts(<<EOS)
-  };
+def output_conversion_code file
+  file.puts(<<EOS)
+  static bool adjust_double_si_suffix(double &res, const char *suffix) {
+    if(*suffix == '\\0')
+      return true;
+    if(*(suffix + 1) != '\\0')
+      return false;
 
-  bool adjust_double_si_suffix(double &res, const char *unit);
-  double conv_double(const char *str, std::string &err, bool si_suffix);
-  int conv_enum(const char* str, std::string& err, const char* const strs[]);
+    switch(*suffix) {
+    case 'a': res *= 1e-18; break;
+    case 'f': res *= 1e-15; break;
+    case 'p': res *= 1e-12; break;
+    case 'n': res *= 1e-9;  break;
+    case 'u': res *= 1e-6;  break;
+    case 'm': res *= 1e-3;  break;
+    case 'k': res *= 1e3;   break;
+    case 'M': res *= 1e6;   break;
+    case 'G': res *= 1e9;   break;
+    case 'T': res *= 1e12;  break;
+    case 'P': res *= 1e15;  break;
+    case 'E': res *= 1e18;  break;
+    default: return false;
+    }
+    return true;
+  }
+
+  static double conv_double(const char *str, std::string &err, bool si_suffix) {
+    char *endptr = 0;
+    errno = 0;
+    double res = strtod(str, &endptr);
+    if(errno) {
+      err.assign(strerror(errno));
+      return (double)0.0;
+    }
+    bool invalid =
+      si_suffix ? !adjust_double_si_suffix(res, endptr) : *endptr != '\\0';
+    if(invalid) {
+      err.assign("Invalid character");
+      return (double)0.0;
+    }
+    return res;
+  }
+
+  static int conv_enum(const char* str, std::string& err, const char* const strs[]) {
+    int res = 0;
+    for(const char* const* cstr = strs; *cstr; ++cstr, ++res)
+      if(!strcmp(*cstr, str))
+        return res;
+    err += "Invalid constant '";
+    err += str;
+    err += "'. Expected one of { ";
+    for(const char* const* cstr = strs; *cstr; ++cstr) {
+      if(cstr != strs)
+        err += ", ";
+      err += *cstr;
+    }
+    err += " }";
+    return -1;
+  }
 
   template<typename T>
   static bool adjust_int_si_suffix(T &res, const char *suffix) {
@@ -92,13 +102,13 @@ EOS
       err.assign(strerror(errno));
       return (T)0;
     }
-    bool invalid = 
+    bool invalid =
       si_suffix ? !adjust_int_si_suffix(res, endptr) : *endptr != '\\0';
     if(invalid) {
       err.assign("Invalid character");
       return (T)0;
     }
-    if(res > std::numeric_limits<T>::max() || 
+    if(res > std::numeric_limits<T>::max() ||
        res < std::numeric_limits<T>::min()) {
       err.assign("Value out of range");
       return (T)0;
@@ -126,7 +136,7 @@ EOS
       err.assign("Invalid character");
       return (T)0;
     }
-    if(res > std::numeric_limits<T>::max() || 
+    if(res > std::numeric_limits<T>::max() ||
        res < std::numeric_limits<T>::min()) {
       err.assign("Value out of range");
       return (T)0;
@@ -145,131 +155,44 @@ EOS
     }
     return os.str();
   }
-  
-}
 
-#endif
-EOS
-    end
-  end
-    
-def output_library_code file
-  open(file, "w") do |fd|
-    fd.puts(<<EOS)
-/* Copyright (c) 2011 Guillaume Marcais
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use,
- * copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following
- * conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- */
-
-#include #{$inc_path}
-
-namespace yaggo {
-EOS
-
-    [:uint32, :uint64, :int32, :int64, :int, :long, :double].each do |type|
-      fd.puts(<<EOS)
-  #{$type_to_C_type[type]} string::as_#{type}(bool si_suffix) const {
-    std::string err;
-    #{$type_to_C_type[type]} res = #{str_conv("this->c_str()", type, "si_suffix")};
-    if(!err.empty()) {
-      std::string msg("Invalid conversion of '");
-      msg += *this;
-      msg += "' to #{type}_t: ";
-      msg += err;
-      throw std::runtime_error(msg);
+  class string : public std::string {
+  public:
+    string() : std::string() {}
+    explicit string(const std::string &s) : std::string(s) {}
+    explicit string(const char *s) : std::string(s) {}
+    int as_enum(const char* const strs[]) {
+      std::string err;
+      int res = #{str_conv("this->c_str()", :enum, "strs")};
+      if(!err.empty())
+        throw std::runtime_error(err);
+      return res;
     }
-    return res;
-  }
+
 
 EOS
-    end
-
-    fd.puts(<<EOS)
-  int string::as_enum(const char* const strs[]) {
-    std::string err;
-    int res = #{str_conv("this->c_str()", :enum, "strs")};
-    if(!err.empty())
-      throw std::runtime_error(err);
-    return res;
-  }
-
-  bool adjust_double_si_suffix(double &res, const char *suffix) {
-    if(*suffix == '\\0')
-      return true;
-    if(*(suffix + 1) != '\\0')
-      return false;
-
-    switch(*suffix) {
-    case 'a': res *= 1e-18; break;
-    case 'f': res *= 1e-15; break;
-    case 'p': res *= 1e-12; break;
-    case 'n': res *= 1e-9;  break;
-    case 'u': res *= 1e-6;  break;
-    case 'm': res *= 1e-3;  break;
-    case 'k': res *= 1e3;   break;
-    case 'M': res *= 1e6;   break;
-    case 'G': res *= 1e9;   break;
-    case 'T': res *= 1e12;  break;
-    case 'P': res *= 1e15;  break;
-    case 'E': res *= 1e18;  break;
-    default: return false;
+  [:uint32, :uint64, :int32, :int64, :int, :long, :double].each do |type|
+  file.puts(<<EOS)
+    #{$type_to_C_type[type]} as_#{type}_suffix() const { return as_#{type}(true); }
+    #{$type_to_C_type[type]} as_#{type}(bool si_suffix = false) const {
+      std::string err;
+      #{$type_to_C_type[type]} res = #{str_conv("this->c_str()", type, "si_suffix")};
+      if(!err.empty()) {
+        std::string msg("Invalid conversion of '");
+        msg += *this;
+        msg += "' to #{type}_t: ";
+        msg += err;
+        throw std::runtime_error(msg);
+      }
+      return res;
     }
-    return true;
-  }
-
-  double conv_double(const char *str, std::string &err, bool si_suffix) {
-    char *endptr = 0;
-    errno = 0;
-    double res = strtod(str, &endptr);
-    if(errno) {
-      err.assign(strerror(errno));
-      return (double)0.0;
-    }
-    bool invalid =
-      si_suffix ? !adjust_double_si_suffix(res, endptr) : *endptr != '\\0';
-    if(invalid) {
-      err.assign("Invalid character");
-      return (double)0.0;
-    }
-    return res;
-  }
-
-  int conv_enum(const char* str, std::string& err, const char* const strs[]) {
-    int res = 0;
-    for(const char* const* cstr = strs; *cstr; ++cstr, ++res)
-      if(!strcmp(*cstr, str))
-        return res;
-    err += "Invalid constant '";
-    err += str;
-    err += "'. Expected one of { ";
-    for(const char* const* cstr = strs; *cstr; ++cstr) {
-      if(cstr != strs)
-        err += ", ";
-      err += *cstr;
-    }
-    err += " }";
-    return -1;
-  }
-}
 EOS
   end
-end
+
+  file.puts(<<EOS)
+  };
+
+EOS
+# }
+    end
+

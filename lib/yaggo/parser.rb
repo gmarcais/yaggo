@@ -1,3 +1,17 @@
+# This file is part of Yaggo.
+
+# Yaggo is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# Yaggo is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with Yaggo.  If not, see <http://www.gnu.org/licenses/>.
 
 def output_cpp_parser(h, class_name)
   $options.each { |o| o.check }
@@ -32,9 +46,26 @@ h.puts(<<EOS)
 #ifndef __#{class_name.upcase()}_HPP__
 #define __#{class_name.upcase()}_HPP__
 
-#include #{$inc_path}
+#include <stdint.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <getopt.h>
+#include <errno.h>
+#include <string.h>
+#include <stdexcept>
+#include <string>
+#include <limits>
+#include <vector>
+#include <iostream>
+#include <sstream>
 
 class #{class_name} {
+ // Boiler plate stuff. Conversion from string to other formats
+EOS
+
+  output_conversion_code h
+
+  h.puts(<<EOS)
 public:
 EOS
 
@@ -47,6 +78,7 @@ EOS
   # Create enum if option with no short version
   only_long = $options.map { |o| o.long_enum }.compact
   need_full = $options.any? { |o| o.hidden }
+
   help_no_h = $options.any? { |o| o.short == "h" }
   version_no_V = $options.any? { |o| o.short == "V" }
   h.print("  enum {\n    USAGE_OPT = 1000")
@@ -289,7 +321,6 @@ EOS
 
   # Private methods
   h.puts(<<EOS)
-private:
 };
 EOS
 

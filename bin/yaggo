@@ -30,37 +30,25 @@ require 'yaggo/zsh_completion'
 
 $yaggo_options = {
   :output => nil,
-  :lib => false,
   :license => nil,
-  :prefix => nil,
-  :local => false,
   :stub => false,
   :zc => nil,
   :debug => false,
 }
-$yaggo_version = "1.2"
+$yaggo_version = "1.3.0"
 parser = OptionParser.new do |o|
   o.version = $yaggo_version
   o.banner = "Usage: #{$0} [options] [file.yaggo]"
   o.separator ""
   o.separator "Specific options:"
 
-  o.on("-l", "--lib", "Output yaggo.{cpp,hpp}") {
-    $yaggo_options[:lib] = true
-  }
   o.on("-o", "--output FILE", "Output file") { |v|
     $yaggo_options[:output] = v
   }
-  o.on("-p", "--prefix PATH", "Prefix to include yaggo.hpp") { |v|
-    $yaggo_options[:prefix] = v
-  }
-  o.on("--license PATH", "License file to copy in header") { |v|
+  o.on("-l", "--license PATH", "License file to copy in header") { |v|
     $yaggo_options[:license] = v
   }
-  o.on("--local", "Local include (#include \"...\")") {
-    $yaggo_options[:local] = true
-  }
-  o.on("--man", "Manual page") {
+  o.on("-m", "--man", "Manual page") {
     display_man_page STDOUT
     exit 0;
   }
@@ -92,7 +80,7 @@ if $yaggo_options[:stub]
   exit
 end
 
-if !$yaggo_options[:lib] && !$yaggo_options[:stub] && !$yaggo_options[:manual] && ARGV.empty?
+if !$yaggo_options[:stub] && !$yaggo_options[:manual] && ARGV.empty?
   STDERR.puts "Error: some yaggo files and/or --lib switch is required", parser
   exit 1
 end
@@ -108,20 +96,6 @@ if !$yaggo_options[:output].nil?
   end
 end
 
-# Path to include yaggo.hpp in C
-$inc_path = $yaggo_options[:local] ? '"' : '<'
-if $yaggo_options[:prefix]
-  $inc_path += File.join($yaggo_options[:prefix], "yaggo.hpp")
-else
-  $inc_path += "yaggo.hpp"
-end
-$inc_path += $yaggo_options[:local] ? '"' : '>'
-
-if $yaggo_options[:lib]
-  output_library_header "yaggo.hpp"
-  output_library_code "yaggo.cpp"
-end
- 
 ARGV.each do |input_file|
   pid = fork do
     begin

@@ -1,3 +1,19 @@
+# This file is part of Yaggo.
+
+# Yaggo is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# Yaggo is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with Yaggo.  If not, see <http://www.gnu.org/licenses/>.
+
+
 ##############################
 # Process an input files. Define the Domain Specific Language.
 ##############################
@@ -311,7 +327,7 @@ class Option < BaseOptArg
        "\" #{@var}_arg:\"", "#{@var}_arg", '"|"', "#{@var}::strs[#{@var}_arg]"]
     else
       ["\"#{@var}_given:\"", "#{@var}_given", 
-       "\" #{@var}_arg:\"", @multiple ? "yaggo::vec_str(#{@var}_arg)" : "#{@var}_arg"]
+       "\" #{@var}_arg:\"", @multiple ? "vec_str(#{@var}_arg)" : "#{@var}_arg"]
     end
   end
 
@@ -394,7 +410,7 @@ class Arg < BaseOptArg
 
   def dump
     ["\"#{@var}_arg:\"",
-     @multiple ? "yaggo::vec_str(#{@var}_arg)" : "#{@var}_arg"]
+     @multiple ? "vec_str(#{@var}_arg)" : "#{@var}_arg"]
   end
 
   def parse_arg
