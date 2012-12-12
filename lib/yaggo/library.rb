@@ -143,8 +143,8 @@ def output_conversion_code file
   class string : public std::string {
   public:
     string() : std::string() {}
-    string(const std::string &s) : std::string(s) {}
-    string(const char *s) : std::string(s) {}
+    explicit string(const std::string &s) : std::string(s) {}
+    explicit string(const char *s) : std::string(s) {}
     int as_enum(const char* const strs[]) {
       std::string err;
       int res = #{str_conv("this->c_str()", :enum, "strs")};
