@@ -35,7 +35,7 @@ $yaggo_options = {
   :zc => nil,
   :debug => false,
 }
-$yaggo_version = "1.2"
+$yaggo_version = "1.3.0"
 parser = OptionParser.new do |o|
   o.version = $yaggo_version
   o.banner = "Usage: #{$0} [options] [file.yaggo]"
