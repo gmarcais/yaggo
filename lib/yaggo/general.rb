@@ -9,7 +9,7 @@ $type_to_C_type = {
   :int => "int",
   :long => "long",
   :double => "double",
-  :string => "yaggo::string",
+  :string => "string",
   :c_string => "const char *",
   :enum => "int",
 }
@@ -53,18 +53,18 @@ end
 def str_conv(arg, type, *argv)
   case type
   when :string
-    "yaggo::string(#{arg})"
+    "string(#{arg})"
   when :c_string
     arg
   when :uint32, :uint64
-    "yaggo::conv_uint<#{$type_to_C_type[type]}>((const char*)#{arg}, err, #{suffix_arg(argv[0])})"
+    "conv_uint<#{$type_to_C_type[type]}>((const char*)#{arg}, err, #{suffix_arg(argv[0])})"
   when :int32, :int64, :long, :int
-    "yaggo::conv_int<#{$type_to_C_type[type]}>((const char*)#{arg}, err, #{suffix_arg(argv[0])})"
+    "conv_int<#{$type_to_C_type[type]}>((const char*)#{arg}, err, #{suffix_arg(argv[0])})"
   when :double
-    "yaggo::conv_double((const char*)#{arg}, err, #{suffix_arg(argv[0])})"
+    "conv_double((const char*)#{arg}, err, #{suffix_arg(argv[0])})"
   when :enum
     # Convert a string to its equivalent enum value
-    "yaggo::conv_enum((const char*)#{arg}, err, #{argv[0]})"
+    "conv_enum((const char*)#{arg}, err, #{argv[0]})"
   end
 end
 

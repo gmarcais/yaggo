@@ -311,7 +311,7 @@ class Option < BaseOptArg
        "\" #{@var}_arg:\"", "#{@var}_arg", '"|"', "#{@var}::strs[#{@var}_arg]"]
     else
       ["\"#{@var}_given:\"", "#{@var}_given", 
-       "\" #{@var}_arg:\"", @multiple ? "yaggo::vec_str(#{@var}_arg)" : "#{@var}_arg"]
+       "\" #{@var}_arg:\"", @multiple ? "vec_str(#{@var}_arg)" : "#{@var}_arg"]
     end
   end
 
@@ -394,7 +394,7 @@ class Arg < BaseOptArg
 
   def dump
     ["\"#{@var}_arg:\"",
-     @multiple ? "yaggo::vec_str(#{@var}_arg)" : "#{@var}_arg"]
+     @multiple ? "vec_str(#{@var}_arg)" : "#{@var}_arg"]
   end
 
   def parse_arg

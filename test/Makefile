@@ -6,11 +6,9 @@ RY = ruby -I../lib $(YAGGO)
 
 all: count
 
-count: count.o yaggo.o
-yaggo.cpp yaggo.hpp: $(YAGGO)
-	$(RY) --lib
+count: count.o
 count_cmdline.hpp _count: count.yaggo $(YAGGO)
 	$(RY) --debug --zc _count $<
-count.o: count.cpp count_cmdline.hpp yaggo.hpp
+count.o: count.cpp count_cmdline.hpp
 clean:
 	rm -f *.o count
