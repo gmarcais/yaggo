@@ -32,9 +32,26 @@ h.puts(<<EOS)
 #ifndef __#{class_name.upcase()}_HPP__
 #define __#{class_name.upcase()}_HPP__
 
-#include #{$inc_path}
+#include <stdint.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <getopt.h>
+#include <errno.h>
+#include <string.h>
+#include <stdexcept>
+#include <string>
+#include <limits>
+#include <vector>
+#include <iostream>
+#include <sstream>
 
 class #{class_name} {
+ // Boiler plate stuff. Conversion from string to other formats
+EOS
+
+  output_conversion_code h
+
+  h.puts(<<EOS)
 public:
 EOS
 
@@ -47,6 +64,7 @@ EOS
   # Create enum if option with no short version
   only_long = $options.map { |o| o.long_enum }.compact
   need_full = $options.any? { |o| o.hidden }
+
   help_no_h = $options.any? { |o| o.short == "h" }
   version_no_V = $options.any? { |o| o.short == "V" }
   h.print("  enum {\n    USAGE_OPT = 1000")
@@ -289,7 +307,6 @@ EOS
 
   # Private methods
   h.puts(<<EOS)
-private:
 };
 EOS
 
