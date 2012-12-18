@@ -13,6 +13,10 @@
 # You should have received a copy of the GNU General Public License
 # along with Yaggo.  If not, see <http://www.gnu.org/licenses/>.
 
+def quote_newline_dquotes str, spaces = ""
+  str.gsub(/"/, '\\"').split(/\n/).join("\\n\" \\\n#{spaces}\"")
+end
+
 def output_cpp_parser(h, class_name)
   $options.each { |o| o.check }
   $args.each { |a| a.check }
@@ -92,7 +96,7 @@ EOS
   end
 
   # Constructors and initialization
-  h.puts("", "  #{class_name}() : ")
+  h.puts("", "  #{class_name}() :")
   h.puts("    " + ($options + $args).map { |o| o.init }.join(",\n    "), "  { }")
   h.puts("", "  #{class_name}(int argc, char* argv[]) :")
   h.puts("    " + ($options + $args).map { |o| o.init }.join(",\n    "))
@@ -122,12 +126,12 @@ EOS
   # Actual parsing
   h.puts(<<EOS)
 #define CHECK_ERR(type,val,which) if(!err.empty()) { std::cerr << "Invalid " #type " '" << val << "' for [" which "]: " << err << "\\n"; exit(1); }
-    while(true) { 
+    while(true) {
       int index = -1;
       int c = getopt_long(argc, argv, short_options, long_options, &index);
       if(c == -1) break;
       switch(c) {
-      case ':': 
+      case ':':
         std::cerr << \"Missing required argument for \"
                   << (index == -1 ? std::string(1, (char)optopt) : std::string(long_options[index].name))
                   << std::endl;
@@ -232,14 +236,21 @@ EOS
   h.puts("  }") # close parser
 
   # Usage
-  h.print("\n#define #{class_name}_USAGE \"Usage: #{$package || class_name} [options]")
-  $args.each { |a|
-    h.print(" #{a.name}:#{a.typestr || dflt_typestr(a.type)}#{a.multiple ? "+" : ""}") 
-  }
-  h.puts("\"")
+  if !$usage.nil?
+    ausage = quote_newline_dquotes($usage, "  ")
+  else
+    ausage = "Usage: #{$package || class_name} [options]"
+    $args.each { |a|
+     ausage += " #{a.name}:#{a.typestr || dflt_typestr(a.type)}#{a.multiple ? "+" : ""}"
+    }
+  end
+  h.puts("",
+         "#define #{class_name}_USAGE \"#{ausage}\"",
+         "")
+
   h.puts(<<EOS)
   const char * usage() const { return #{class_name}_USAGE; }
-  void error(const char *msg) { 
+  void error(const char *msg) {
     std::cerr << \"Error: \" << msg << \"\\n\" << usage()
               << \"\\nUse --help for more information\"
               << std::endl;
@@ -280,10 +291,18 @@ EOS
   version_switch = " -V, "
   version_switch = " " * version_switch.size if version_no_V
   version_switch += "--version"
+  h.print("  \"#{version_switch.ljust($switchesjust)}  Version")
+  if $after_text.nil?
+    h.print("\"")
+  else
+    h.puts("\\n\" \\", "  \"\\n\" \\")
+    atext = quote_newline_dquotes($after_text, "  ")
+    h.print("  \"#{atext}\"")
+  end
   h.puts(<<EOS)
-  "#{version_switch.ljust($switchesjust)}  Version"
 
   const char * help() const { return #{class_name}_HELP; }
+
 EOS
 
   # Hidden options

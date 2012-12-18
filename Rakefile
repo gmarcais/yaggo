@@ -4,7 +4,7 @@ require 'rubygems/package_task'
 
 spec = Gem::Specification.new do |s|
   s.name        = "yaggo"
-  s.version     = "1.3.0"
+  s.version     = "1.4.0"
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["Guillaume Marçais"]
   s.email       = ["gmarcais@umd.edu"]
@@ -27,6 +27,7 @@ Gem::PackageTask.new(spec) do |pkg|
   pkg.need_tar = true
 end
 
+desc "Run yaggo"
 task :yaggo do |t|
   ARGV.shift if ARGV[0] == "yaggo"
   ruby("-Ilib", "./bin/yaggo", *ARGV)
@@ -34,6 +35,7 @@ end
 
 task :default => :yaggo
 
+desc "Create a distribution tarball"
 task :dist do |t|
   system("tar", "-zc", "-f", "yaggo-#{spec.version}.tar.gz",
          "--transform", "s|^|yaggo-#{spec.version}/|",
@@ -57,6 +59,7 @@ def inline_includes ifd, ofd, loaded
   }
 end
 
+desc "Create a single file executable"
 task :exec do |t|
   loaded = {}
   open("yaggo", "w", 0755) do |wfd|
