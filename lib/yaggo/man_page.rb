@@ -100,8 +100,8 @@ int main(int argc, char *argv[]) {
     std::cout << "No string switch\\\\n";
   std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\\\n";
   std::cout << "First arg: " << args.first_arg << "\\\\n";
-  std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity_strs[args.severity_arg] << "\\\\n";
-  if(args.severity_arg == example_args::high)
+  std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity::strs[args.severity_arg] << "\\\\n";
+  if(args.severity_arg == example_args::severity::high)
     std::cout << "Warning: severity is high\\\\n";
   std::cout << "Rest:";
   for(example_args::rest_arg_it it = args.rest_arg.begin(); it != args.rest_arg.end(); ++it)
