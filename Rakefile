@@ -4,7 +4,7 @@ require 'rubygems/package_task'
 
 spec = Gem::Specification.new do |s|
   s.name        = "yaggo"
-  s.version     = "1.3.0"
+  s.version     = "1.4.0"
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["Guillaume Marçais"]
   s.email       = ["gmarcais@umd.edu"]
