@@ -23,7 +23,7 @@ yaggo \- command line switch parser generator
 
 .SH SYNOPSIS
 .B yaggo
-[-l|--lib] [-p|--prefix PATH] [--local] [--man] [-h|--help]
+[-o|--output FILE] [-l|--license PATH] [-s|--stub] [--zc PATH] [-e|--extended-syntax] [--man] [-h|--help]
 
 .SH DESCRIPTION
 Yaggo stands for Yet Another GenGetOpt. It is inspired by gengetopt
@@ -48,6 +48,9 @@ Display this man page
 .TP
 \-s|\-\-stub
 Generate a stub: a simple yaggo file that can be modified for one's use.
+.TP
+\-e|--extended-syntax
+Use the extended syntax: blocks can be defined on the next line of a command.
 .TP
 \-h|--help
 Display a short help text

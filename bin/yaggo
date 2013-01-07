@@ -33,6 +33,7 @@ $yaggo_options = {
   :license => nil,
   :stub => false,
   :zc => nil,
+  :extended => false,
   :debug => false,
 }
 $yaggo_version = "1.4.0"
@@ -57,6 +58,9 @@ parser = OptionParser.new do |o|
   }
   o.on("--zc PATH", "Write zsh completion file") { |v|
     $yaggo_options[:zc] = v
+  }
+  o.on("-e", "--extended-syntax", "Use extended syntax") {
+    $yaggo_options[:extended] = true
   }
   o.on("--debug", "Debug yaggo") {
     $yaggo_options[:debug] = true
@@ -99,7 +103,11 @@ end
 ARGV.each do |input_file|
   pid = fork do
     begin
-      eval(File.read(input_file))
+      yaggo_script = File.read(input_file)
+      if $yaggo_options[:extended]
+        yaggo_script.gsub!(/\)\s*\n\s*{/, ") {")
+      end
+      eval(yaggo_script)
       parsed = true
       check_conflict_exclude
     rescue RuntimeError, SyntaxError, Errno::ENOENT, Errno::EACCES => e
