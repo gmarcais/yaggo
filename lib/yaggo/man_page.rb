@@ -233,8 +233,8 @@ boolean is true, parsing is done using SI suffixes.
 enum
 This statement must be followed by a comma separated list of strings
 (as in 'enum "choice0", "choice1, "choice2"'). This switch takes value
-a string in the list and is converted to int and a C enum type named
-'switchname_enum' is defined with the same choices in the given order.
+a string in the list and is converted to int. C enum type named
+"switchname::enum" is defined with the same choices in the given order.
 
 .TP
 required
