@@ -85,10 +85,12 @@ EOS
 
   help_no_h = $options.any? { |o| o.short == "h" }
   version_no_V = $options.any? { |o| o.short == "V" }
-  h.print("  enum {\n    USAGE_OPT = 1000")
+  usage_no_U = $options.any? { |o| o.short == "U" }
+  h.print("  enum {\n    START_OPT = 1000")
   h.print(",\n    FULL_HELP_OPT") if need_full
   h.print(",\n    HELP_OPT") if help_no_h
   h.print(",\n    VERSION_OPT") if version_no_V
+  h.print(",\n    USAGE_OPT") if usage_no_U
   if only_long.empty?
     h.puts("\n  };")
   else
@@ -109,12 +111,13 @@ EOS
     h.puts("      " + $options.map { |o| o.struct }.join(",\n      ") + ",")
   h.puts("      {\"help\", 0, 0, #{help_no_h ? "HELP_OPT" : "'h'"}},")
   h.puts("      {\"full-help\", 0, 0, FULL_HELP_OPT},") if need_full
-  h.puts("      {\"usage\", 0, 0, USAGE_OPT},",
+  h.puts("      {\"usage\", 0, 0, #{usage_no_U ? "USAGE_OPT" : "'U'"}},",
          "      {\"version\", 0, 0, #{version_no_V ? "VERSION_OPT" : "'V'"}},",
          "      {0, 0, 0, 0}", "    };")
   short_str = $posix ? "+" : ""
   short_str += "h" unless help_no_h
   short_str += "V" unless version_no_V
+  short_str += "U" unless usage_no_U
   short_str += $options.map { |o| o.short_str }.compact.join("")
   
   h.puts("    static const char *short_options = \"#{short_str}\";", "")
@@ -139,7 +142,7 @@ EOS
       case #{help_no_h ? "HELP_OPT" : "'h'"}:
         std::cout << usage() << \"\\n\\n\" << help() << std::endl;
         exit(0);
-      case USAGE_OPT:
+      case #{usage_no_U ? "USAGE_OPT" : "'U'"}:
         std::cout << usage() << \"\\nUse --help for more information.\" << std::endl;
         exit(0);
       case 'V':
@@ -282,7 +285,10 @@ EOS
     end
     h.puts("  \"#{s} #{o.help}\\n\" \\") 
   }
-  h.puts("  \"#{"     --usage".ljust($switchesjust)}  Usage\\n\" \\")
+  usage_switch = " -U, "
+  usage_switch = " " * usage_switch.size if usage_no_U
+  usage_switch += "--usage"
+  h.puts("  \"#{usage_switch.ljust($switchesjust)}  Usage\\n\" \\")
   help_switch = " -h, "
   help_switch = " " * help_switch.size if help_no_h
   help_switch += "--help"
