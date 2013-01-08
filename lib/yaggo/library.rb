@@ -40,7 +40,7 @@ def output_conversion_code file
     return true;
   }
 
-  static double conv_double(const char *str, std::string &err, bool si_suffix) {
+  static double conv_double(const char *str, ::std::string &err, bool si_suffix) {
     char *endptr = 0;
     errno = 0;
     double res = strtod(str, &endptr);
@@ -57,7 +57,7 @@ def output_conversion_code file
     return res;
   }
 
-  static int conv_enum(const char* str, std::string& err, const char* const strs[]) {
+  static int conv_enum(const char* str, ::std::string& err, const char* const strs[]) {
     int res = 0;
     for(const char* const* cstr = strs; *cstr; ++cstr, ++res)
       if(!strcmp(*cstr, str))
@@ -94,7 +94,7 @@ def output_conversion_code file
   }
 
   template<typename T>
-  static T conv_int(const char *str, std::string &err, bool si_suffix) {
+  static T conv_int(const char *str, ::std::string &err, bool si_suffix) {
     char *endptr = 0;
     errno = 0;
     long long int res = strtoll(str, &endptr, 0);
@@ -108,8 +108,8 @@ def output_conversion_code file
       err.assign("Invalid character");
       return (T)0;
     }
-    if(res > std::numeric_limits<T>::max() ||
-       res < std::numeric_limits<T>::min()) {
+    if(res > ::std::numeric_limits<T>::max() ||
+       res < ::std::numeric_limits<T>::min()) {
       err.assign("Value out of range");
       return (T)0;
     }
@@ -117,7 +117,7 @@ def output_conversion_code file
   }
 
   template<typename T>
-  static T conv_uint(const char *str, std::string &err, bool si_suffix) {
+  static T conv_uint(const char *str, ::std::string &err, bool si_suffix) {
     char *endptr = 0;
     errno = 0;
     while(isspace(*str)) { ++str; }
@@ -136,8 +136,8 @@ def output_conversion_code file
       err.assign("Invalid character");
       return (T)0;
     }
-    if(res > std::numeric_limits<T>::max() ||
-       res < std::numeric_limits<T>::min()) {
+    if(res > ::std::numeric_limits<T>::max() ||
+       res < ::std::numeric_limits<T>::min()) {
       err.assign("Value out of range");
       return (T)0;
     }
@@ -145,9 +145,9 @@ def output_conversion_code file
   }
 
   template<typename T>
-  static std::string vec_str(const std::vector<T> &vec) {
-    std::ostringstream os;
-    for(typename std::vector<T>::const_iterator it = vec.begin();
+  static ::std::string vec_str(const std::vector<T> &vec) {
+    ::std::ostringstream os;
+    for(typename ::std::vector<T>::const_iterator it = vec.begin();
         it != vec.end(); ++it) {
       if(it != vec.begin())
         os << ",";
@@ -156,16 +156,16 @@ def output_conversion_code file
     return os.str();
   }
 
-  class string : public std::string {
+  class string : public ::std::string {
   public:
-    string() : std::string() {}
-    explicit string(const std::string &s) : std::string(s) {}
-    explicit string(const char *s) : std::string(s) {}
+    string() : ::std::string() {}
+    explicit string(const ::std::string &s) : std::string(s) {}
+    explicit string(const char *s) : ::std::string(s) {}
     int as_enum(const char* const strs[]) {
-      std::string err;
+      ::std::string err;
       int res = #{str_conv("this->c_str()", :enum, "strs")};
       if(!err.empty())
-        throw std::runtime_error(err);
+        throw ::std::runtime_error(err);
       return res;
     }
 
@@ -175,14 +175,14 @@ EOS
   file.puts(<<EOS)
     #{$type_to_C_type[type]} as_#{type}_suffix() const { return as_#{type}(true); }
     #{$type_to_C_type[type]} as_#{type}(bool si_suffix = false) const {
-      std::string err;
+      ::std::string err;
       #{$type_to_C_type[type]} res = #{str_conv("this->c_str()", type, "si_suffix")};
       if(!err.empty()) {
-        std::string msg("Invalid conversion of '");
+        ::std::string msg("Invalid conversion of '");
         msg += *this;
         msg += "' to #{type}_t: ";
         msg += err;
-        throw std::runtime_error(msg);
+        throw ::std::runtime_error(msg);
       }
       return res;
     }

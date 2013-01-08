@@ -124,38 +124,38 @@ EOS
 
   need_err   = $options.any? { |o| o.type != :flag && o.type != :string && o.type != :c_string}
   need_err ||= $args.any? { |a| a.type != :string && a.type != :c_string }
-  h.puts("    std::string err;") if need_err
+  h.puts("    ::std::string err;") if need_err
 
   # Actual parsing
   h.puts(<<EOS)
-#define CHECK_ERR(type,val,which) if(!err.empty()) { std::cerr << "Invalid " #type " '" << val << "' for [" which "]: " << err << "\\n"; exit(1); }
+#define CHECK_ERR(type,val,which) if(!err.empty()) { ::std::cerr << "Invalid " #type " '" << val << "' for [" which "]: " << err << "\\n"; exit(1); }
     while(true) {
       int index = -1;
       int c = getopt_long(argc, argv, short_options, long_options, &index);
       if(c == -1) break;
       switch(c) {
       case ':':
-        std::cerr << \"Missing required argument for \"
-                  << (index == -1 ? std::string(1, (char)optopt) : std::string(long_options[index].name))
-                  << std::endl;
+        ::std::cerr << \"Missing required argument for \"
+                  << (index == -1 ? ::std::string(1, (char)optopt) : std::string(long_options[index].name))
+                  << ::std::endl;
         exit(1);
       case #{help_no_h ? "HELP_OPT" : "'h'"}:
-        std::cout << usage() << \"\\n\\n\" << help() << std::endl;
+        ::std::cout << usage() << \"\\n\\n\" << help() << std::endl;
         exit(0);
       case #{usage_no_U ? "USAGE_OPT" : "'U'"}:
-        std::cout << usage() << \"\\nUse --help for more information.\" << std::endl;
+        ::std::cout << usage() << \"\\nUse --help for more information.\" << std::endl;
         exit(0);
       case 'V':
         print_version();
         exit(0);
       case '?':
-        std::cerr << \"Use --usage or --help for some help\\n\";
+        ::std::cerr << \"Use --usage or --help for some help\\n\";
         exit(1);
 EOS
   if need_full
     h.puts(<<EOS)
       case FULL_HELP_OPT:
-        std::cout << usage() << \"\\n\\n\" << help() << \"\\n\\n\" << hidden() << std::endl;
+        ::std::cout << usage() << \"\\n\\n\" << help() << \"\\n\\n\" << hidden() << std::endl;
         exit(0);
 EOS
   end
@@ -229,7 +229,7 @@ EOS
       msg = Arg === o ? "Argument " + o.name : "Switch " + o.switches
       msg += ", access right (#{o.access_types.join("|")}) failed for file '"
       h.puts("    if(access(#{o.var}_arg, #{mode})) {",
-             "      std::string err(\"#{msg}\");",
+             "      ::std::string err(\"#{msg}\");",
              "      ((err += #{o.var}_arg) += \"': \") += strerror(errno);",
              "      error(err.c_str());",
              "    }")
@@ -254,9 +254,9 @@ EOS
   h.puts(<<EOS)
   const char * usage() const { return #{class_name}_USAGE; }
   void error(const char *msg) {
-    std::cerr << \"Error: \" << msg << \"\\n\" << usage()
+    ::std::cerr << \"Error: \" << msg << \"\\n\" << usage()
               << \"\\nUse --help for more information\"
-              << std::endl;
+              << ::std::endl;
     exit(1);
   }
 EOS
@@ -332,7 +332,7 @@ EOS
   
 
   # Version
-  h.puts("  void print_version(std::ostream &os = std::cout) const {",
+  h.puts("  void print_version(::std::ostream &os = std::cout) const {",
          "#ifndef PACKAGE_VERSION",
          "#define PACKAGE_VERSION \"0.0.0\"",
          "#endif",
@@ -340,7 +340,7 @@ EOS
          "  }")
   
   # Dump
-  h.puts("  void dump(std::ostream &os = std::cout) {")
+  h.puts("  void dump(::std::ostream &os = std::cout) {")
   ($options + $args).each { |o| h.puts("    os << #{o.dump.join(" << ")} << \"\\n\";") }
   h.puts("  }")
 

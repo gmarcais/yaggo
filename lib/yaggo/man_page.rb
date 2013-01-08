@@ -96,20 +96,20 @@ The associated simple C++ program 'examples.cpp' which display information about
 int main(int argc, char *argv[]) {
   example_args args(argc, argv);
 
-  std::cout << "Integer switch: " << args.int_arg << "\\\\n";
+  ::std::cout << "Integer switch: " << args.int_arg << "\\\\n";
   if(args.string_given)
-    std::cout << "Number of string(s): " << args.string_arg.size() << "\\\\n";
+    ::std::cout << "Number of string(s): " << args.string_arg.size() << "\\\\n";
   else
-    std::cout << "No string switch\\\\n";
-  std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\\\n";
-  std::cout << "First arg: " << args.first_arg << "\\\\n";
-  std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity::strs[args.severity_arg] << "\\\\n";
+    ::std::cout << "No string switch\\\\n";
+  ::std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\\\n";
+  ::std::cout << "First arg: " << args.first_arg << "\\\\n";
+  ::std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity::strs[args.severity_arg] << "\\\\n";
   if(args.severity_arg == example_args::severity::high)
-    std::cout << "Warning: severity is high\\\\n";
-  std::cout << "Rest:";
+    ::std::cout << "Warning: severity is high\\\\n";
+  ::std::cout << "Rest:";
   for(example_args::rest_arg_it it = args.rest_arg.begin(); it != args.rest_arg.end(); ++it)
-    std::cout << " " << *it;
-  std::cout << std::endl;
+    ::std::cout << " " << *it;
+  ::std::cout << std::endl;
 
   return 0;
 }
@@ -227,7 +227,7 @@ p, f, and a are supported for the double type.
 .TP
 c_string, string
 This switch is taken as a C string (const char *) or a C++ string
-(inherits from std::string). The C++ string type has the extra
+(inherits from ::std::string). The C++ string type has the extra
 methods '<type> as_<type>(bool suffix)', where <type> is any numerical
 type as above, to convert the string into that type. If the 'suffix'
 boolean is true, parsing is done using SI suffixes.
@@ -258,7 +258,7 @@ hidden switches, if any.
 .TP
 multiple
 This switch can be passed multiple times. The values are stored in a
-std::vector. A type for the iterator is also defined in the class with
+::std::vector. A type for the iterator is also defined in the class with
 the name 'switch_arg_it', where 'switch' is the name of the option.
 .TP
 flag
