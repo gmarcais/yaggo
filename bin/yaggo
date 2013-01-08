@@ -20,6 +20,7 @@
 
 require 'optparse'
 
+require 'yaggo/version'
 require 'yaggo/man_page'
 require 'yaggo/stub'
 require 'yaggo/general'
@@ -36,7 +37,7 @@ $yaggo_options = {
   :extended => false,
   :debug => false,
 }
-$yaggo_version = "1.4.0"
+
 parser = OptionParser.new do |o|
   o.version = $yaggo_version
   o.banner = "Usage: #{$0} [options] [file.yaggo]"
