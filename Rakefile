@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 require 'rubygems'
 require 'rubygems/package_task'
+load 'lib/yaggo/version.rb'
 
 spec = Gem::Specification.new do |s|
   s.name        = "yaggo"
-  s.version     = "1.4.0"
+  s.version     = $yaggo_version
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["Guillaume Marçais"]
   s.email       = ["gmarcais@umd.edu"]

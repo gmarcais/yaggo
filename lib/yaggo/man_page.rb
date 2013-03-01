@@ -23,7 +23,7 @@ yaggo \- command line switch parser generator
 
 .SH SYNOPSIS
 .B yaggo
-[-l|--lib] [-p|--prefix PATH] [--local] [--man] [-h|--help]
+[-o|--output FILE] [-l|--license PATH] [-s|--stub] [--zc PATH] [-e|--extended-syntax] [--man] [-h|--help]
 
 .SH DESCRIPTION
 Yaggo stands for Yet Another GenGetOpt. It is inspired by gengetopt
@@ -48,6 +48,9 @@ Display this man page
 .TP
 \-s|\-\-stub
 Generate a stub: a simple yaggo file that can be modified for one's use.
+.TP
+\-e|--extended-syntax
+Use the extended syntax: blocks can be defined on the next line of a command.
 .TP
 \-h|--help
 Display a short help text
@@ -93,20 +96,20 @@ The associated simple C++ program 'examples.cpp' which display information about
 int main(int argc, char *argv[]) {
   example_args args(argc, argv);
 
-  std::cout << "Integer switch: " << args.int_arg << "\\\\n";
+  ::std::cout << "Integer switch: " << args.int_arg << "\\\\n";
   if(args.string_given)
-    std::cout << "Number of string(s): " << args.string_arg.size() << "\\\\n";
+    ::std::cout << "Number of string(s): " << args.string_arg.size() << "\\\\n";
   else
-    std::cout << "No string switch\\\\n";
-  std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\\\n";
-  std::cout << "First arg: " << args.first_arg << "\\\\n";
-  std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity::strs[args.severity_arg] << "\\\\n";
+    ::std::cout << "No string switch\\\\n";
+  ::std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\\\n";
+  ::std::cout << "First arg: " << args.first_arg << "\\\\n";
+  ::std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity::strs[args.severity_arg] << "\\\\n";
   if(args.severity_arg == example_args::severity::high)
-    std::cout << "Warning: severity is high\\\\n";
-  std::cout << "Rest:";
+    ::std::cout << "Warning: severity is high\\\\n";
+  ::std::cout << "Rest:";
   for(example_args::rest_arg_it it = args.rest_arg.begin(); it != args.rest_arg.end(); ++it)
-    std::cout << " " << *it;
-  std::cout << std::endl;
+    ::std::cout << " " << *it;
+  ::std::cout << std::endl;
 
   return 0;
 }
@@ -224,7 +227,7 @@ p, f, and a are supported for the double type.
 .TP
 c_string, string
 This switch is taken as a C string (const char *) or a C++ string
-(inherits from std::string). The C++ string type has the extra
+(inherits from ::std::string). The C++ string type has the extra
 methods '<type> as_<type>(bool suffix)', where <type> is any numerical
 type as above, to convert the string into that type. If the 'suffix'
 boolean is true, parsing is done using SI suffixes.
@@ -233,8 +236,8 @@ boolean is true, parsing is done using SI suffixes.
 enum
 This statement must be followed by a comma separated list of strings
 (as in 'enum "choice0", "choice1, "choice2"'). This switch takes value
-a string in the list and is converted to int and a C enum type named
-'switchname_enum' is defined with the same choices in the given order.
+a string in the list and is converted to int. C enum type named
+"switchname::enum" is defined with the same choices in the given order.
 
 .TP
 required
@@ -255,7 +258,7 @@ hidden switches, if any.
 .TP
 multiple
 This switch can be passed multiple times. The values are stored in a
-std::vector. A type for the iterator is also defined in the class with
+::std::vector. A type for the iterator is also defined in the class with
 the name 'switch_arg_it', where 'switch' is the name of the option.
 .TP
 flag

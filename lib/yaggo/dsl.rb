@@ -267,7 +267,7 @@ class Option < BaseOptArg
     else
       a = []
       if @multiple
-        c_type = "std::vector<#{$type_to_C_type[@type]}>"
+        c_type = "::std::vector<#{$type_to_C_type[@type]}>"
         a << (c_type.ljust($typejust) + " #{@var}_arg;")
         a << ("typedef #{c_type}::iterator #{@var}_arg_it;")
         a << ("typedef #{c_type}::const_iterator #{@var}_arg_const_it;")
@@ -394,7 +394,7 @@ class Arg < BaseOptArg
 
   def var_decl
     if @multiple
-      c_type = "std::vector<#{$type_to_C_type[@type]}>"
+      c_type = "::std::vector<#{$type_to_C_type[@type]}>"
       [c_type.ljust($typejust) + " #{@var}_arg;",
        "typedef #{c_type}::iterator #{@var}_arg_it;",
        "typedef #{c_type}::const_iterator #{@var}_arg_const_it;"]
