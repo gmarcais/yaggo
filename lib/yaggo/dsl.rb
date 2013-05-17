@@ -336,7 +336,6 @@ class Option < BaseOptArg
   def parse_arg
     a = @imply.map { |ios| "#{$opt_hash[ios].var}_flag = true;" }
     if @type == :flag
-      p [@var, @default]
       return a + ["#{@var}_flag = #{@default == "true" ? "false" : "true"};"]
     end
     a << "#{@var}_given = true;"
