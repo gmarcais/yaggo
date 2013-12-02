@@ -136,8 +136,7 @@ def output_conversion_code file
       err.assign("Invalid character");
       return (T)0;
     }
-    if(res > ::std::numeric_limits<T>::max() ||
-       res < ::std::numeric_limits<T>::min()) {
+    if(res > ::std::numeric_limits<T>::max()) {
       err.assign("Value out of range");
       return (T)0;
     }
