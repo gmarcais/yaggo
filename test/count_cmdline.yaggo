@@ -37,10 +37,10 @@ option("severity") {
   enum "low", "middle", "high"
 #  default 2
 }
-# option("out-counter-len") {
-#   hidden; uint32; default "4"; typestr "Length in bytes"
-#   description "Length of counter fiel in output"
-# }
+option("out-counter-len") {
+  hidden; uint32; default "4"; typestr "Length in bytes"
+  description "Length of counter fiel in output"
+}
 option("both-strands", "C") {
   flag; off; description "Count both strand, canonical representation"
 }
