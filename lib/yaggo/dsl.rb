@@ -64,6 +64,7 @@ def enum(*argv); $target.type = :enum; $target.enum = argv; end
 def suffix; $target.suffix = true; end
 def required; $target.required = true; end
 def hidden; $target.hidden = true; end
+def secret; $target.secret = true; end
 def on; $target.on; end
 def off; $target.off; end
 def default str; $target.default = str; end
@@ -134,7 +135,7 @@ end
 
 class Option < BaseOptArg
   attr_accessor :description, :required, :typestr
-  attr_accessor :hidden, :conflict, :multiple, :access_types
+  attr_accessor :hidden, :secret, :conflict, :multiple, :access_types
   attr_reader :long, :short, :var, :type, :at_least, :default, :suffix, :enum
   attr_reader :imply
 
@@ -381,6 +382,10 @@ class Arg < BaseOptArg
 
   def hidden=(*args)
     raise "An arg cannot be marked hidden"
+  end
+
+  def secret=(*args)
+    raise "An arg cannot be marked secret"
   end
 
   def required=(*args)

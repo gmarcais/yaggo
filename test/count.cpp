@@ -27,5 +27,7 @@ int main(int argc, char *argv[])
   } catch(std::exception& e) {
     std::cerr << "Conv to enum failed: " << e.what() << std::endl;
   }
+  if(args.secret_flag)
+    std::cerr << "How did you know about the --secret option?" << std::endl;
   return 0;
 }

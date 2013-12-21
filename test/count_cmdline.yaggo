@@ -69,6 +69,9 @@ option("verra") {
 option("file") {
   description "file"
   c_string; access("write"); typestr "path" }
+option("secret") {
+  description "Very secret option"
+  off; secret }
 arg("first") {
   c_string; typestr "path"
   description "First"; access "read", "exec"

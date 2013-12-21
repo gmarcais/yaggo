@@ -20,7 +20,7 @@ end
 def output_options_descriptions out, opts, hidden
   opts.each { |o|
     # need to be improved. break lines if too long
-    next if o.hidden ^ hidden
+    next if o.secret || (o.hidden ^ hidden)
     s = " " + o.switches
     if s.size >= $switchesjust
       s += "\\n" + "".ljust($switchesjust)
