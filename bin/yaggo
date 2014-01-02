@@ -106,7 +106,7 @@ ARGV.each do |input_file|
     begin
       yaggo_script = File.read(input_file)
       if $yaggo_options[:extended]
-        yaggo_script.gsub!(/\)\s*\n\s*{/, ") {")
+        yaggo_script.gsub!(/\)\s*\n\s*\{/, ") {")
       end
       eval(yaggo_script)
       parsed = true
