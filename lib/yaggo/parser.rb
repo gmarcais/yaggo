@@ -17,6 +17,20 @@ def quote_newline_dquotes str, spaces = ""
   str.gsub(/"/, '\\"').split(/\n/).join("\\n\" \\\n#{spaces}\"")
 end
 
+def output_options_descriptions out, opts, hidden
+  opts.each { |o|
+    # need to be improved. break lines if too long
+    next if o.secret || (o.hidden ^ hidden)
+    s = " " + o.switches
+    if s.size >= $switchesjust
+      s += "\\n" + "".ljust($switchesjust)
+    else
+      s = s.ljust($switchesjust)
+    end
+    out.puts("    \"#{s} #{o.help}\\n\"") 
+  }
+end
+
 def output_cpp_parser(h, class_name)
   $options.each { |o| o.check }
   $args.each { |a| a.check }
@@ -62,6 +76,7 @@ h.puts(<<EOS)
 #include <vector>
 #include <iostream>
 #include <sstream>
+#include <memory>
 
 class #{class_name} {
  // Boiler plate stuff. Conversion from string to other formats
@@ -155,7 +170,7 @@ EOS
   if need_full
     h.puts(<<EOS)
       case FULL_HELP_OPT:
-        ::std::cout << usage() << \"\\n\\n\" << help() << \"\\n\\n\" << hidden() << std::endl;
+        ::std::cout << usage() << \"\\n\\n\" << help() << \"\\n\\n\" << hidden() << std::flush;
         exit(0);
 EOS
   end
@@ -247,18 +262,28 @@ EOS
      ausage += " #{a.name}:#{a.typestr || dflt_typestr(a.type)}#{a.multiple ? "+" : ""}"
     }
   end
-  h.puts("",
-         "#define #{class_name}_USAGE \"#{ausage}\"",
-         "")
 
   h.puts(<<EOS)
-  const char * usage() const { return #{class_name}_USAGE; }
-  void error(const char *msg) {
-    ::std::cerr << \"Error: \" << msg << \"\\n\" << usage()
-              << \"\\nUse --help for more information\"
-              << ::std::endl;
-    exit(1);
-  }
+  static const char * usage() { return "#{ausage}"; }
+  class error {
+    int code_;
+    std::ostringstream msg_;
+  public:
+    error(int code = EXIT_FAILURE) : code_(code) { }
+    explicit error(const char* msg, int code = EXIT_FAILURE) : code_(code)
+      { msg_ << msg; }
+    error(const std::string& msg, int code = EXIT_FAILURE) : code_(code)
+      { msg_ << msg; }
+    template<typename T>
+    error& operator<<(const T& x) { msg_ << x; return (*this); }
+    ~error() {
+      ::std::cerr << "Error: " << msg_.str() << "\\n"
+                  << usage() << "\\n"
+                  << "Use --help for more information"
+                  << ::std::endl;
+      exit(code_);
+    }
+  };
 EOS
 
   # Help
@@ -267,68 +292,54 @@ EOS
     desc += $purpose + "\\n\\n"
   end
   unless $description.nil?
-    desc += $description.split(/\n/).join("\\n\" \\\n  \"") + "\\n\\n"
+    desc += $description.split(/\n/).join("\\n\" \\\n    \"") + "\\n\\n"
   end
-  h.puts(<<EOS)
 
-#define #{class_name}_HELP "#{desc}" \\
-  "Options (default value in (), *required):\\n" \\
+  h.puts(<<EOS)
+  static const char * help() { return
+    "#{desc}"
+    "Options (default value in (), *required):\\n"
 EOS
-  $options.each { |o|
-    # need to be improved. break lines if too long
-    next if o.hidden
-    s = " " + o.switches
-    if s.size >= $switchesjust
-      s += "\\n" + "".ljust($switchesjust)
-    else
-      s = s.ljust($switchesjust)
-    end
-    h.puts("  \"#{s} #{o.help}\\n\" \\") 
-  }
+  output_options_descriptions(h, $options, false)
   usage_switch = " -U, "
   usage_switch = " " * usage_switch.size if usage_no_U
   usage_switch += "--usage"
-  h.puts("  \"#{usage_switch.ljust($switchesjust)}  Usage\\n\" \\")
+  h.puts("    \"#{usage_switch.ljust($switchesjust)}  Usage\\n\"")
   help_switch = " -h, "
   help_switch = " " * help_switch.size if help_no_h
   help_switch += "--help"
-  h.puts("  \"#{help_switch.ljust($switchesjust)}  This message\\n\" \\")
-  h.puts("  \"#{"     --full-help".ljust($switchesjust)}  Detailed help\\n\" \\") if need_full
+  h.puts("    \"#{help_switch.ljust($switchesjust)}  This message\\n\"")
+  h.puts("    \"#{"     --full-help".ljust($switchesjust)}  Detailed help\\n\"") if need_full
   version_switch = " -V, "
   version_switch = " " * version_switch.size if version_no_V
   version_switch += "--version"
-  h.print("  \"#{version_switch.ljust($switchesjust)}  Version")
+  h.print("    \"#{version_switch.ljust($switchesjust)}  Version")
   if $after_text.nil?
-    h.print("\"")
+    h.puts("\";")
   else
-    h.puts("\\n\" \\", "  \"\\n\" \\")
+    h.puts("\\n\" \\", "  \"\\n\"")
     atext = quote_newline_dquotes($after_text, "  ")
-    h.print("  \"#{atext}\"")
+    h.puts("    \"#{atext}\";")
   end
-  h.puts(<<EOS)
+  h.puts("  }")
 
-  const char * help() const { return #{class_name}_HELP; }
-
+  # Hidden help
+  has_hidden = $options.any? { |o| o.hidden }
+  if has_hidden 
+    h.puts(<<EOS)
+  static const char* hidden() { return
+    "Hidden options:\\n"
 EOS
-
-  # Hidden options
-  h.print("#define #{class_name}_HIDDEN \"Hidden options:")
-  $options.each { |o|
-    # need to be improved. break lines if too long
-    next unless o.hidden
-    s = " " + o.switches
-    if s.size >= $switchesjust
-      s += "\\n" + "".ljust($switchesjust)
-    else
-      s = s.ljust($switchesjust)
-    end
-    h.print("\\n\" \\\n  \"#{s} #{o.help}") 
+  output_options_descriptions(h, $options, true)
+  h.puts(<<EOS)
+    "";
   }
-  h.puts(<<EOS)
-"
-
-  const char * hidden() const { return #{class_name}_HIDDEN; }
 EOS
+  else
+    h.puts(<<EOS)
+  static const char* hidden() { return ""; }
+EOS
+  end
   
 
   # Version

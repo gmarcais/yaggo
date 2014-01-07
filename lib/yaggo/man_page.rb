@@ -96,20 +96,20 @@ The associated simple C++ program 'examples.cpp' which display information about
 int main(int argc, char *argv[]) {
   example_args args(argc, argv);
 
-  ::std::cout << "Integer switch: " << args.int_arg << "\\\\n";
+  std::cout << "Integer switch: " << args.int_arg << "\\\\n";
   if(args.string_given)
-    ::std::cout << "Number of string(s): " << args.string_arg.size() << "\\\\n";
+    std::cout << "Number of string(s): " << args.string_arg.size() << "\\\\n";
   else
-    ::std::cout << "No string switch\\\\n";
-  ::std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\\\n";
-  ::std::cout << "First arg: " << args.first_arg << "\\\\n";
-  ::std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity::strs[args.severity_arg] << "\\\\n";
+    std::cout << "No string switch\\\\n";
+  std::cout << "Flag is " << (args.flag_flag ? "on" : "off") << "\\\\n";
+  std::cout << "First arg: " << args.first_arg << "\\\\n";
+  std::cout << "Severity arg: " << args.severity_arg << " " << example_args::severity::strs[args.severity_arg] << "\\\\n";
   if(args.severity_arg == example_args::severity::high)
-    ::std::cout << "Warning: severity is high\\\\n";
-  ::std::cout << "Rest:";
+    std::cout << "Warning: severity is high\\\\n";
+  std::cout << "Rest:";
   for(example_args::rest_arg_it it = args.rest_arg.begin(); it != args.rest_arg.end(); ++it)
-    ::std::cout << " " << *it;
-  ::std::cout << std::endl;
+    std::cout << " " << *it;
+  std::cout << std::endl;
 
   return 0;
 }
@@ -227,7 +227,7 @@ p, f, and a are supported for the double type.
 .TP
 c_string, string
 This switch is taken as a C string (const char *) or a C++ string
-(inherits from ::std::string). The C++ string type has the extra
+(inherits from std::string). The C++ string type has the extra
 methods '<type> as_<type>(bool suffix)', where <type> is any numerical
 type as above, to convert the string into that type. If the 'suffix'
 boolean is true, parsing is done using SI suffixes.
@@ -235,7 +235,7 @@ boolean is true, parsing is done using SI suffixes.
 .TP
 enum
 This statement must be followed by a comma separated list of strings
-(as in 'enum "choice0", "choice1, "choice2"'). This switch takes value
+(as in 'enum "choice0", "choice1", "choice2"'). This switch takes value
 a string in the list and is converted to int. C enum type named
 "switchname::enum" is defined with the same choices in the given order.
 
@@ -256,9 +256,13 @@ hidden
 This switch is not shown with --help. Use --full-help to see the
 hidden switches, if any.
 .TP
+secret
+This switch is not shown in any help message. Neither --help nor
+--full-help.
+.TP
 multiple
 This switch can be passed multiple times. The values are stored in a
-::std::vector. A type for the iterator is also defined in the class with
+std::vector. A type for the iterator is also defined in the class with
 the name 'switch_arg_it', where 'switch' is the name of the option.
 .TP
 flag
@@ -300,6 +304,47 @@ statement takes a single argument, the name of the arg, and a block of
 statements. The block of statements are similar to the option block,
 except that hidden, flag, on and off are not allowed. At most one arg
 can have the 'multiple' statement, and it must be the last one.
+
+.SH EXAMPLE USAGE
+
+The argument object parses the switches on construction or later on
+using the parse method. For example, the two pieces code show these
+two different usage. 
+
+Using parse method:
+.nf
+  example_args args; // Global variable with switches
+
+  int main(int argc, char* argv[]) {
+    args.parse(argc, argv);
+  }
+.fi
+
+Parse on construction:
+.nf
+  int main(int argc, char* argv[]) {
+    example_args args(argc, argv);
+  }
+.fi
+
+The subclass error can be used to output error messsage (and terminate
+program). It output an error message, the usage string, etc. The error
+class behave like an output stream, it can be used to create
+complicated error message. For example:
+
+.nf
+  if(false_condition)
+    example_args::error() << "Failed to open file '" << args.file_arg << "'";
+.fi
+
+An error object prints an error message and terminate the program with
+exit upon destruction. Make sure that the error message is properly
+scoped to be destroyed where the program should terminate. In
+practice, as in the example above, the error class is created in an if
+statement and therefore destructed right away.
+
+An exit code can be passed to error. By default the exit code (passed
+to exit) is the constant EXIT_FAILURE (normally 1). For example:
 
 .SH LICENSE
 
