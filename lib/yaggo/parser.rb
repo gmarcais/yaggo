@@ -268,12 +268,33 @@ EOS
   class error {
     int code_;
     std::ostringstream msg_;
+
+    // Select the correct version (GNU or XSI) version of
+    // strerror_r. strerror_ behaves like the GNU version of strerror_r,
+    // regardless of which version is provided by the system.
+    static const char* strerror__(char* buf, int res) {
+      return res != -1 ? buf : "Invalid error";
+    }
+    static const char* strerror__(char* buf, char* res) {
+      return res;
+    }
+    static const char* strerror_(int err, char* buf, size_t buflen) {
+      return strerror__(buf, strerror_r(err, buf, buflen));
+    }
+    struct no_t { };
+
   public:
+    static no_t no;
     error(int code = EXIT_FAILURE) : code_(code) { }
     explicit error(const char* msg, int code = EXIT_FAILURE) : code_(code)
       { msg_ << msg; }
     error(const std::string& msg, int code = EXIT_FAILURE) : code_(code)
       { msg_ << msg; }
+    error& operator<<(no_t) {
+      char buf[1024];
+      msg_ << ": " << strerror_(errno, buf, sizeof(buf));
+      return *this;
+    }
     template<typename T>
     error& operator<<(const T& x) { msg_ << x; return (*this); }
     ~error() {

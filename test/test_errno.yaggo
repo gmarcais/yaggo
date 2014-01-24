@@ -1,0 +1,7 @@
+description "Toto"
+
+name "args_t"
+
+arg("test") {
+  description "Test"
+  c_string }
