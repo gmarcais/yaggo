@@ -2,6 +2,7 @@
 require 'rubygems'
 require 'rubygems/package_task'
 load 'lib/yaggo/version.rb'
+load 'bin/create_yaggo_one_file'
 
 spec = Gem::Specification.new do |s|
   s.name        = "yaggo"
@@ -43,29 +44,7 @@ task :dist do |t|
          "README", "COPYING", "setup.rb", "bin", "lib")
 end
 
-def inline_includes ifd, ofd, loaded
-  ifd.lines.each { |l|
-    if l =~ /^\s*require\s+['"]yaggo\/(\w+)['"]\s*$/
-      file = $1
-      unless loaded[file]
-        loaded[file] = true
-        ofd.puts("", "# Loading yaggo/#{file}", "")
-        open(File.join("lib", "yaggo", file + ".rb"), "r") { |nfd|
-          inline_includes(nfd, ofd, loaded)
-        }
-      end
-    else
-      ofd.print(l)
-    end
-  }
-end
-
 desc "Create a single file executable"
 task :exec do |t|
-  loaded = {}
-  open("yaggo", "w", 0755) do |wfd|
-    open("bin/yaggo", "r") do |rfd|
-      inline_includes(rfd, wfd, loaded)
-    end
-  end
+  create_binary("bin/yaggo", "yaggo")
 end

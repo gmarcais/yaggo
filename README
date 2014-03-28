@@ -1,5 +1,1 @@
-Yaggo is a tool to generate command line parsers for C++.
-
-To install: run 'ruby setup.rb install'
-
-To get documentation: yaggo --man
+See README.md
