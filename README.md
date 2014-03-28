@@ -31,7 +31,7 @@ sudo gem install ./pkg/yaggo-1.5.3.gem
 
 ## Simple
 
-Given the following configuration file 'parse.yaggo':
+Given the following configuration file 'parser.yaggo':
 
 ```Ruby
 purpose "Demonstrate yaggo capabilities"
@@ -54,7 +54,7 @@ arg("path") {
 }
 ```
 
-The following C++ program ('parse.cc') does switch parsing, generate
+The following C++ program ('parser.cc') does switch parsing, generate
 appropriate errors and has an automatically generated help (accessible
 with '-h' or '--help').
 
@@ -76,11 +76,11 @@ int main(int argc, char* argv[]) {
 All of this is compiled with:
 
 ```Shell
-yaggo parse.yaggo
-g++ -o parse parse.cc
+yaggo parser.yaggo
+g++ -o parser parser.cc
 ```
 
-Then, './parse --help' returns:
+Then, './parser --help' returns:
 
 ```
 Usage: parser [options] path:string
