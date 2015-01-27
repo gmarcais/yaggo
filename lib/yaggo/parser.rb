@@ -139,6 +139,7 @@ EOS
 
   need_err   = $options.any? { |o| o.type != :flag && o.type != :string && o.type != :c_string}
   need_err ||= $args.any? { |a| a.type != :string && a.type != :c_string }
+  need_err ||= ($options + $args).any? { |o| !o.access_types.empty? }
   h.puts("    ::std::string err;") if need_err
 
   # Actual parsing
@@ -236,15 +237,15 @@ EOS
 
   # Check access rights
   if ($options + $args).any? { |o| !o.access_types.empty? }
+    r_to_f = { "read" => "R_OK", "write" => "W_OK", "exec" => "X_OK" }
     h.puts("", "    // Check access rights")
     ($args + $options).each { |o|
       next if o.access_types.empty?
-      r_to_f = { "read" => "R_OK", "write" => "W_OK", "exec" => "X_OK" }
       mode = o.access_types.map { |t| r_to_f[t] }.join("|")
       msg = Arg === o ? "Argument " + o.name : "Switch " + o.switches
       msg += ", access right (#{o.access_types.join("|")}) failed for file '"
       h.puts("    if(access(#{o.var}_arg, #{mode})) {",
-             "      ::std::string err(\"#{msg}\");",
+             "      err = \"#{msg}\";",
              "      ((err += #{o.var}_arg) += \"': \") += strerror(errno);",
              "      error(err.c_str());",
              "    }")
