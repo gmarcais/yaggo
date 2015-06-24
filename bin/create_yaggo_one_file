@@ -1,7 +1,7 @@
 #! /usr/bin/env ruby
 
 def inline_includes ifd, ofd, loaded
-  ifd.lines.each { |l|
+  ifd.each_line { |l|
     if l =~ /^\s*require\s+['"]yaggo\/(\w+)['"]\s*$/
       file = $1
       unless loaded[file]
