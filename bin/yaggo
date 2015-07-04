@@ -50,8 +50,8 @@ parser = OptionParser.new do |o|
   o.on("-l", "--license PATH", "License file to copy in header") { |v|
     $yaggo_options[:license] = v
   }
-  o.on("-m", "--man", "Manual page") {
-    display_man_page STDOUT
+  o.on("-m", "--man [FILE]", "Display or write manpage") { |v|
+    display_man_page v
     exit 0;
   }
   o.on("-s", "--stub", "Output a stub yaggo file") {
