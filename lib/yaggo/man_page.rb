@@ -13,10 +13,11 @@
 # You should have received a copy of the GNU General Public License
 # along with Yaggo.  If not, see <http://www.gnu.org/licenses/>.
 
+require 'pathname'
 
 def display_man_page out
   manual = <<EOS
-.TH yaggo 1  "2012-03-09" "version #{$yaggo_version}" "USER COMMANDS"
+.TH yaggo 1  "2015-06-24" "version #{$yaggo_version}" "USER COMMANDS"
 
 .SH NAME
 yaggo \- command line switch parser generator
@@ -309,7 +310,7 @@ can have the 'multiple' statement, and it must be the last one.
 
 The argument object parses the switches on construction or later on
 using the parse method. For example, the two pieces code show these
-two different usage. 
+two different usage.
 
 Using parse method:
 .nf
@@ -375,7 +376,7 @@ Guillaume Marcais (gmarcais@umd.edu)
 getopt_long(3), gengetopt(1)
 EOS
 
-  if out.isatty
+  if !out && STDOUT.isatty
     require 'tempfile'
     Tempfile.open("yaggo_man") do |fd|
       begin
@@ -386,7 +387,10 @@ EOS
         fd.unlink
       end
     end
+  elsif !out
+    STDOUT.puts(manual)
   else
-    out.puts(manual)
+    path = Pathname.new(out)
+    path.write manual
   end
 end
