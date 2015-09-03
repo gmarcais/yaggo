@@ -84,6 +84,8 @@ def default_val(val, type, *argv)
   case type
   when :string, :c_string
     "\"#{val || $type_default[type]}\""
+  when :uint32, :uint64, :int32, :int64, :int, :long, :double
+    "(#{$type_to_C_type[type]})#{val}"
   else
     val.to_s || $type_default[type]
   end
@@ -173,6 +175,59 @@ class Option < BaseOptArg
     end
   end
 
+  def convert_int(x, signed = true)
+    x =~ /^([+-]?\d+)([kMGTPE]?)$/ or return nil
+    v = $1.to_i
+    return nil if v < 0 && !signed
+    case $2
+    when "k"
+      v *= 1000
+    when "M"
+      v *= 1000_000
+    when "G"
+      v *= 1000_000_000
+    when "T"
+      v *= 1000_000_000_000
+    when "P"
+      v *= 1000_000_000_000_000
+    when "E"
+      v *= 1000_000_000_000_000_000
+    end
+    return v
+  end
+
+  def convert_double(x)
+    x =~ /^([+-]?[\d]+(?:\.\d*))?(?:([afpnumkMGTPE])|([eE][+-]?\d+))?$/ or return nil
+    v = "#{$1}#{$3}".to_f
+    case $2
+    when "a"
+      v *= 1e-18
+    when "f"
+      v *= 1e-15
+    when "p"
+      v *= 1e-12
+    when "n"
+      v *= 1e-9
+    when "u"
+      v *= 1e-6
+    when "m"
+      v *= 1e-3
+    when "k"
+      v *= 1e3
+    when "M"
+      v *= 1e6
+    when "G"
+      v *= 1e9
+    when "T"
+      v *= 1e12
+    when "P"
+      v *= 1e15
+    when "E"
+      v *= 1e18
+    end
+    return v
+  end
+
   def default=(v)
     type.nil? and raise "A type must be specified before defining a default value"
     unless default.nil?
@@ -184,18 +239,19 @@ class Option < BaseOptArg
       raise "More than 1 default value specified: '#{v1}' and '#{v2}'"
     end
     pref = "Option #{long || ""}|#{short || ""}:"
+    bv = v # Backup v for display
     case @type
     when nil
       raise "#{pref} No type specified"
     when :uint32, :uint64
-      (Integer === v && v >= 0) || (String === v && v =~ /^\d+$/) or
-        raise "#{pref} Invalid unsigned integer '#{v}'"
+      (Integer === v && v >= 0) || (String === v && v = convert_int(v, false)) or
+        raise "#{pref} Invalid unsigned integer '#{bv}'"
     when :int32, :int64, :int, :long
-      (Integer === v) || (String === v && /^[+-]?\d+$/) or
-        raise "#{pref} Invalid integer #{v}"
+      (Integer === v) || (String === v && v = convert_int(v, true)) or
+        raise "#{pref} Invalid integer #{bv}"
     when :double
-      (Float === v) || (String === v && v =~ /^[+-]?[\d.]+([eE][+-]?\d+)?$/) or
-        raise "#{pref} Invalid double #{v}"
+      (Float === v) || (String === v && v = convert_double(v)) or
+        raise "#{pref} Invalid double #{bv}"
     when :enum
       v = v.to_i if v =~ /^\d+$/
       case v
