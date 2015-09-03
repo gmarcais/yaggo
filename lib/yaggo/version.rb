@@ -1,1 +1,1 @@
-$yaggo_version = "1.5.5"
+$yaggo_version = "1.5.6"
