@@ -57,10 +57,16 @@ Use the extended syntax: blocks can be defined on the next line of a command.
 Display a short help text
 .PP
 
-.SH EXAMPLES
-Here is a fully working example. Consider the description
-files 'example_args.yaggo' which defines two switches (-i and -s)
-and arguments (first and the optional rest).
+.SH EXAMPLE
+
+Consider the description files 'example_args.yaggo' which defines a
+switch "-i" (or "--int") that takes an unsigned integer and defaults
+to 42; a switch "-s" (or "--string") that takes a string and can be
+given multiple times; a switch "--flag" which does not take any
+argument; a switch "--severity" which can take only 3 values: "low",
+"middle" and "high".
+
+It takes the following arguments: a string followed by zero or more floating point numbers.
 
 .nf
 purpose "Example of yaggo usage"
@@ -193,12 +199,50 @@ creates 'switch_arg', with a type as specified, and 'switch_given', a
 boolean indicating whether or not the switch was given on the command
 line.
 
-In addition to the switch created by 'option', the following switches are defined:
+For example, the statement:
+
+.nf
+option("integer", "i") {
+  int; default 5
+}
+.fi
+
+will add the following members to the C++ class:
+
+.nf
+int integer_arg;
+bool integer_given;
+.fi
+
+where "integer_arg" is initialized to 5 and "integer_given" is
+initialized to "false". If the switch "--integer 10" or "-i 10" is
+passed on the command line "integer_arg" is set to 10 and
+integer_given is set to "true".
+
+The statement:
+
+.nf
+option("verbose") {
+  off
+}
+.fi
+
+will add the following member to the C++ class:
+
+.nf
+bool verbose_flag;
+.fi
+
+where "verbose_flag" is initialized to "false". Passing the switch
+"--verbose" on the command line sets "verbose_flag" to true".
+
+
+In addition to the switch created by 'option', the following switches
+are defined by default (unless some option statement overrides them):
 
 .TP
 \-h, \-\-help
-Display the help message. \-h is not defined if it conflicts with an
-option statement.
+Display the help message.
 .TP
 \-\-full\-help
 Display hidden options as well.
@@ -270,11 +314,20 @@ flag
 This switch is a flag and does not take an argument.
 .TP
 on, off
-The default state for a flag switch. Implies flag.
+The default state for a flag switch. Implies flag. Unless the 'no'
+option is used (see below), with 'off', the default value of the flag
+is "false" and passing --flag sets it to true. With 'on', the default
+value of the flag is "true" and passing --flag sets it to false.
+.TP
+no
+A flag with two switches. If the switch is named "flag", two switches
+are generated: --flag and --noflag, respectively setting it to "true"
+and "false". The 'on' and 'off' options define the default value.
 .TP
 default "val"
-The default value for this switch. It must be passed as a string
-(i.e. surrounded by quotes), even for numerical types.
+The default value for this switch. It can be a string or a valid
+number. SI suffixes are supported as well (for example "1M" means 1
+m`illion).
 .TP
 typestr "str"
 In the help message, by default, the type of the option is
@@ -284,7 +337,6 @@ at_least n
 The given switch must be given at least n times. Implies multiple.
 .TP
 access "type"
-
 Make sure that the string passed is a path to which we have
 access. "type" is a comma separated list of "read", "write" or
 "exec". It is checked with access(2). The same warning applies:
@@ -300,11 +352,12 @@ open(2).)"
 
 .PP
 
-A 'arg' statement defines an arg passed nnto the command line. The
+A 'arg' statement defines an arg passed to the command line. The
 statement takes a single argument, the name of the arg, and a block of
 statements. The block of statements are similar to the option block,
-except that hidden, flag, on and off are not allowed. At most one arg
-can have the 'multiple' statement, and it must be the last one.
+except that "hidden", "flag", "on", "off" and "no" are not allowed. At
+most one arg can have the 'multiple' statement, and it must be the
+last one.
 
 .SH EXAMPLE USAGE
 
@@ -339,13 +392,13 @@ complicated error message. For example:
 .fi
 
 An error object prints an error message and terminate the program with
-exit upon destruction. Make sure that the error message is properly
-scoped to be destroyed where the program should terminate. In
-practice, as in the example above, the error class is created in an if
-statement and therefore destructed right away.
+exit upon destruction. An exit code can be passed to error. By default
+the exit code (passed to exit) is the constant EXIT_FAILURE (normally
+1). For example:
 
-An exit code can be passed to error. By default the exit code (passed
-to exit) is the constant EXIT_FAILURE (normally 1). For example:
+.nf
+  example_args::error(77) << "Failed with return code 77";
+.fi
 
 .SH LICENSE
 
@@ -373,7 +426,7 @@ The error message returned by ruby can be a little confusing.
 .SH AUTHOR
 Guillaume Marcais (gmarcais@umd.edu)
 .SH SEE ALSO
-getopt_long(3), gengetopt(1)
+getopt_long(3), gengetopt(1), exit(2)
 EOS
 
   if !out && STDOUT.isatty
