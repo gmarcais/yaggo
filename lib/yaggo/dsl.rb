@@ -67,6 +67,7 @@ def hidden; $target.hidden = true; end
 def secret; $target.secret = true; end
 def on; $target.on; end
 def off; $target.off; end
+def no; $target.no; end
 def default str; $target.default = str; end
 def typestr str; $target.typestr = str; end
 def multiple; $target.multiple = true; end
@@ -84,6 +85,8 @@ def default_val(val, type, *argv)
   case type
   when :string, :c_string
     "\"#{val || $type_default[type]}\""
+  when :uint32, :uint64, :int32, :int64, :int, :long, :double
+    "(#{$type_to_C_type[type]})#{val}"
   else
     val.to_s || $type_default[type]
   end
@@ -135,7 +138,7 @@ end
 
 class Option < BaseOptArg
   attr_accessor :description, :required, :typestr
-  attr_accessor :hidden, :secret, :conflict, :multiple, :access_types
+  attr_accessor :hidden, :secret, :conflict, :multiple, :access_types, :noflag
   attr_reader :long, :short, :var, :type, :at_least, :default, :suffix, :enum
   attr_reader :imply
 
@@ -143,6 +146,7 @@ class Option < BaseOptArg
     @long, @short = long, short
     @var = (@long || @short).gsub(/[^a-zA-Z0-9_]/, "_")
     @type = nil
+    @no = false # Also generate the --noswitch for a flag
     @default = nil
     @suffix = false
     @at_least = nil
@@ -162,6 +166,11 @@ class Option < BaseOptArg
     self.default = "false"
   end
 
+  def no
+    self.type = :flag
+    self.noflag = true
+  end
+
   def tf_to_on_off v
     case v
     when "true"
@@ -171,6 +180,59 @@ class Option < BaseOptArg
     else
       v
     end
+  end
+
+  def convert_int(x, signed = true)
+    x =~ /^([+-]?\d+)([kMGTPE]?)$/ or return nil
+    v = $1.to_i
+    return nil if v < 0 && !signed
+    case $2
+    when "k"
+      v *= 1000
+    when "M"
+      v *= 1000_000
+    when "G"
+      v *= 1000_000_000
+    when "T"
+      v *= 1000_000_000_000
+    when "P"
+      v *= 1000_000_000_000_000
+    when "E"
+      v *= 1000_000_000_000_000_000
+    end
+    return v
+  end
+
+  def convert_double(x)
+    x =~ /^([+-]?[\d]+(?:\.\d*))?(?:([afpnumkMGTPE])|([eE][+-]?\d+))?$/ or return nil
+    v = "#{$1}#{$3}".to_f
+    case $2
+    when "a"
+      v *= 1e-18
+    when "f"
+      v *= 1e-15
+    when "p"
+      v *= 1e-12
+    when "n"
+      v *= 1e-9
+    when "u"
+      v *= 1e-6
+    when "m"
+      v *= 1e-3
+    when "k"
+      v *= 1e3
+    when "M"
+      v *= 1e6
+    when "G"
+      v *= 1e9
+    when "T"
+      v *= 1e12
+    when "P"
+      v *= 1e15
+    when "E"
+      v *= 1e18
+    end
+    return v
   end
 
   def default=(v)
@@ -184,18 +246,19 @@ class Option < BaseOptArg
       raise "More than 1 default value specified: '#{v1}' and '#{v2}'"
     end
     pref = "Option #{long || ""}|#{short || ""}:"
+    bv = v # Backup v for display
     case @type
     when nil
       raise "#{pref} No type specified"
     when :uint32, :uint64
-      (Integer === v && v >= 0) || (String === v && v =~ /^\d+$/) or
-        raise "#{pref} Invalid unsigned integer '#{v}'"
+      (Integer === v && v >= 0) || (String === v && v = convert_int(v, false)) or
+        raise "#{pref} Invalid unsigned integer '#{bv}'"
     when :int32, :int64, :int, :long
-      (Integer === v) || (String === v && /^[+-]?\d+$/) or
-        raise "#{pref} Invalid integer #{v}"
+      (Integer === v) || (String === v && v = convert_int(v, true)) or
+        raise "#{pref} Invalid integer #{bv}"
     when :double
-      (Float === v) || (String === v && v =~ /^[+-]?[\d.]+([eE][+-]?\d+)?$/) or
-        raise "#{pref} Invalid double #{v}"
+      (Float === v) || (String === v && v = convert_double(v)) or
+        raise "#{pref} Invalid double #{bv}"
     when :enum
       v = v.to_i if v =~ /^\d+$/
       case v
@@ -229,6 +292,10 @@ class Option < BaseOptArg
       raise "#{pref} Multiple is meaningless with a flag" if type == :flag
       raise "#{pref} An option marked multiple cannot have a default value" unless default.nil?
       raise "#{pref} Multiple is incompatible with enum type" if type == :enum
+    end
+
+    if @type == :flag && noflag && !short.nil?
+      raise "#{pref} flag with 'no' option cannot have a short switch"
     end
 
     super
@@ -289,9 +356,21 @@ class Option < BaseOptArg
     s
   end
 
-  def long_enum; @short.nil? ? @var.upcase + "_OPT" : nil; end
+  def long_enum
+    return nil if !@short.nil?
+    res = [@var.upcase + "_OPT"]
+    if @type == :flag && noflag
+      res << "NO#{@var.upcase}_OPT"
+    end
+    res
+  end
+
   def struct
-    "{\"#{long}\", #{@type == :flag ? 0 : 1}, 0, #{@short ? "'" + @short + "'" : long_enum}}"
+    res = ["{\"#{long}\", #{@type == :flag ? 0 : 1}, 0, #{@short ? "'" + @short + "'" : long_enum[0]}}"]
+    if @type == :flag && noflag
+      res << "{\"no#{long}\", 0, 0, #{long_enum()[1]}}"
+    end
+    res
   end
   def short_str
     return nil if @short.nil?
@@ -301,7 +380,11 @@ class Option < BaseOptArg
     s  = @short.nil? ? "    " : "-#{@short}"
     s += ", " unless @short.nil? || @long.nil?
     unless @long.nil?
-      s += "--#{@long}"
+      if @type == :flag && @noflag
+        s += "--[no]#{@long}"
+      else
+        s += "--#{@long}"
+      end
       s += "=#{@typestr || dflt_typestr(@type, @enum)}" unless @type == :flag
     end
     s
@@ -334,13 +417,16 @@ class Option < BaseOptArg
     end
   end
 
-  def parse_arg
+  def parse_arg(no = false)
     a = @imply.map { |ios| "#{$opt_hash[ios].var}_flag = true;" }
-    if @type == :flag
-      return a + ["#{@var}_flag = #{@default == "true" ? "false" : "true"};"]
-    end
-    a << "#{@var}_given = true;"
+    a << "#{@var}_given = true;" unless @type == :flag
     case @type
+    when :flag
+      if @noflag
+        a << ["#{@var}_flag = #{no ? "false" : "true"};"]
+      else
+        a << ["#{@var}_flag = #{@default == "true" ? "false" : "true"};"]
+      end
     when :string
       a << (@multiple ? "#{@var}_arg.push_back(#{str_conv("optarg", @type, false)});" : "#{@var}_arg.assign(optarg);")
     when :c_string

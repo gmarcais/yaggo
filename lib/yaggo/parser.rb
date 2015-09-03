@@ -95,7 +95,7 @@ EOS
   h.puts("")
 
   # Create enum if option with no short version
-  only_long = $options.map { |o| o.long_enum }.compact
+  only_long = $options.map { |o| o.long_enum }.flatten.compact
   need_full = $options.any? { |o| o.hidden }
 
   help_no_h = $options.any? { |o| o.short == "h" }
@@ -123,7 +123,7 @@ EOS
   h.puts("  void parse(int argc, char* argv[]) {",
          "    static struct option long_options[] = {")
   $options.empty? or
-    h.puts("      " + $options.map { |o| o.struct }.join(",\n      ") + ",")
+    h.puts("      " + $options.map { |o| o.struct }.flatten.join(",\n      ") + ",")
   h.puts("      {\"help\", 0, 0, #{help_no_h ? "HELP_OPT" : "'h'"}},")
   h.puts("      {\"full-help\", 0, 0, FULL_HELP_OPT},") if need_full
   h.puts("      {\"usage\", 0, 0, #{usage_no_U ? "USAGE_OPT" : "'U'"}},",
@@ -177,9 +177,18 @@ EOS
   end
   
   $options.each { |o|
-    h.puts("      case #{o.long_enum || "'" + o.short + "'"}:",
-           "        " + o.parse_arg.join("\n        "),
-           "        break;")
+    if o.type == :flag && o.noflag
+      h.puts("      case #{o.long_enum[0]}:",
+             "        " + o.parse_arg.join("\n        "),
+             "        break;",
+             "      case #{o.long_enum[1]}:",
+             "        " + o.parse_arg(true).join("\n        "),
+             "        break;")
+    else
+      h.puts("      case #{o.long_enum ? o.long_enum[0] : "'" + o.short + "'"}:",
+             "        " + o.parse_arg.join("\n        "),
+             "        break;")
+    end
   }
   h.puts("      }", # close case
          "    }") # close while(true)
