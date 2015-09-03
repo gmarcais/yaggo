@@ -12,6 +12,7 @@ spec = Gem::Specification.new do |s|
   s.email       = ["gmarcais@umd.edu"]
   s.homepage    = "https://github.com/gmarcais/yaggo"
   s.summary     = "Yet Another Generator for getopt"
+  s.licenses    = ['GPL-3.0']
   s.description = "Yaggo defines a DSL to generate GNU compatible command line parsers for C++ using getopt."
 
   s.required_rubygems_version = ">= 1.3.6"
