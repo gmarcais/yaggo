@@ -86,7 +86,7 @@ def default_val(val, type, *argv)
   when :string, :c_string
     "\"#{val || $type_default[type]}\""
   when :uint32, :uint64, :int32, :int64, :int, :long, :double
-    "(#{$type_to_C_type[type]})#{val}"
+    val ? "(#{$type_to_C_type[type]})#{val}" : $type_default[type]
   else
     val.to_s || $type_default[type]
   end
