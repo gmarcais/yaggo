@@ -47,5 +47,5 @@ end
 
 desc "Create a single file executable"
 task :exec do |t|
-  create_binary("bin/yaggo", "yaggo")
+  create_binary("lib/yaggo/main.rb", "yaggo")
 end
