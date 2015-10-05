@@ -1,8 +1,10 @@
 purpose = "Count k-mers or qmers in fasta or fastq files"
 package "jellyfish count"
-description "Count k-mers in fasta or fastq files.
+description <<EOS
+Count k-mers in fasta or fastq files.
 
-You see it works pretty well"
+You see it works pretty well
+EOS
 version "0.0.1"
 
 license "My great license
