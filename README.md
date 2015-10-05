@@ -11,7 +11,10 @@ line using getopt_long(3). See the Example section below for more details.
 
 ## Quick and easy
 
-To install the yaggo script into your home directory, do:
+Download the standalone script from the [release](https://github.com/gmarcais/yaggo/releases)
+and copy it into a directory in your PATH (e.g. `~/bin`)
+
+From the source tree, the same is achieved with:
 
 ```Shell
 make DEST=$HOME/bin
@@ -19,7 +22,10 @@ make DEST=$HOME/bin
 
 ## As a gem
 
-To install using ruby's package manager gem, first generate the gem
+Download the gem from the [release](https://github.com/gmarcais/yaggo/releases) and install it
+with `sudo gem install ./yaggo-1.5.8.gem` (adjust the version!).
+
+Similarly, from the source tree, first generate the gem
 and then install it. For example here with version 1.5.3:
 
 ```Shell
@@ -27,9 +33,11 @@ rake gem
 sudo gem install ./pkg/yaggo-1.5.3.gem
 ```
 
-# Example
+# Documentation
 
-## Simple
+After installation, documentation is available with `yaggo --man`.
+
+# Simple example
 
 Given the following configuration file 'parser.yaggo':
 
