@@ -31,7 +31,7 @@ end
 $target = NoTarget.new
 
 def output str; $output = str; end
-def name str; $class = str; end
+def name str; $klass = str; end
 def purpose str; $purpose = str; end
 def package str; $package = str; end
 def usage str; $usage = str; end
