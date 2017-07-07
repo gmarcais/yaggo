@@ -44,6 +44,10 @@ def output_conversion_code file
     char *endptr = 0;
     errno = 0;
     double res = strtod(str, &endptr);
+    if(endptr == str) {
+      err.assign("Invalid floating point string");
+      return (double)0.0;
+    }
     if(errno) {
       err.assign(strerror(errno));
       return (double)0.0;
@@ -98,6 +102,10 @@ def output_conversion_code file
     char *endptr = 0;
     errno = 0;
     long long int res = strtoll(str, &endptr, 0);
+    if(endptr == str) {
+      err.assign("Invalid signed int string");
+      return (T)0;
+    }
     if(errno) {
       err.assign(strerror(errno));
       return (T)0;
@@ -126,6 +134,10 @@ def output_conversion_code file
       return (T)0;
     }
     unsigned long long int res = strtoull(str, &endptr, 0);
+    if(endptr == str) {
+      err.assign("Invalid unsigned int string");
+      return (T)0;
+    }
     if(errno) {
       err.assign(strerror(errno));
       return (T)0;
