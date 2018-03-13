@@ -17,7 +17,7 @@ and copy it into a directory in your PATH (e.g. `~/bin`)
 From the source tree, the same is achieved with:
 
 ```Shell
-make DEST=$HOME/bin
+make install prefix=$HOME/bin
 ```
 
 ## As a gem
