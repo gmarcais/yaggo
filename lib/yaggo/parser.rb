@@ -113,10 +113,11 @@ EOS
   end
 
   # Constructors and initialization
-  h.puts("", "  #{class_name}() :")
-  h.puts("    " + ($options + $args).map { |o| o.init }.join(",\n    "), "  { }")
-  h.puts("", "  #{class_name}(int argc, char* argv[]) :")
-  h.puts("    " + ($options + $args).map { |o| o.init }.join(",\n    "))
+  h.puts("", "  #{class_name}()")
+  h.puts("    :" + ($options + $args).map { |o| o.init }.join("\n    ,")) unless $options.empty? && $args.empty?
+  h.puts("  { }")
+  h.puts("", "  #{class_name}(int argc, char* argv[])")
+  h.puts("    :" + ($options + $args).map { |o| o.init }.join("\n    ,")) unless $options.empty? && $args.empty?
   h.puts("  { parse(argc, argv); }", "");
 
   # Main arsing function
