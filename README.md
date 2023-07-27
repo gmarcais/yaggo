@@ -11,26 +11,32 @@ line using getopt_long(3). See the Example section below for more details.
 
 ## Quick and easy
 
-Download the standalone script from the [release](https://github.com/gmarcais/yaggo/releases)
+Download the standalone script called `yaggo` from the [release](https://github.com/gmarcais/yaggo/releases)
 and copy it into a directory in your PATH (e.g. `~/bin`)
 
 From the source tree, the same is achieved with:
 
 ```Shell
-make DEST=$HOME/bin
+make install prefix=$HOME/bin
 ```
 
 ## As a gem
 
-Download the gem from the [release](https://github.com/gmarcais/yaggo/releases) and install it
-with `sudo gem install ./yaggo-1.5.8.gem` (adjust the version!).
+Install directly with the gem command:
+```Shell
+gem install yaggo
+```
+(Use the `--user-install` to install in your home instead of globally).
+
+Alternatively, download the gem from the [release](https://github.com/gmarcais/yaggo/releases) and install it
+with `sudo gem install ./yaggo-x.x.x.gem` (adjust the version!).
 
 Similarly, from the source tree, first generate the gem
-and then install it. For example here with version 1.5.3:
+and then install it. For example:
 
 ```Shell
 rake gem
-sudo gem install ./pkg/yaggo-1.5.3.gem
+sudo gem install ./pkg/yaggo-x.x.x.gem
 ```
 
 # Documentation
