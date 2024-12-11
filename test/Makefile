@@ -1,12 +1,13 @@
-CC = g++
-CPPFLAGS = -I. -Wall -Werror
-CXXFLAGS = -O2
+CXX = g++
+CPPFLAGS += -I. -Wall -Werror
+CXXFLAGS += -O2
 YAGGO = ../bin/yaggo
 RY = ruby -I../lib $(YAGGO)
 
 all: count
 
 count: count.o
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ $< $(LDFLAGS)
 count_cmdline.hpp _count: count_cmdline.yaggo $(YAGGO)
 	$(RY) --debug --zc _count $<
 count.o: count.cpp count_cmdline.hpp
